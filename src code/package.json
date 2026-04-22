@@ -13,6 +13,8 @@
     "build:api": "npm run build --workspace api",
     "lint:web": "npm run lint --workspace web",
     "lint:api": "npm run lint --workspace api",
-    "test:api": "npm run test --workspace api"
+    "test:api": "npm run test --workspace api",
+    "test:e2e:api": "npm run test:e2e --workspace api",
+    "test:e2e:web": "npm run test:e2e --workspace web"
   }
 }

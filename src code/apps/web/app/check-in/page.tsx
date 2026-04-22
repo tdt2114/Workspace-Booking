@@ -436,7 +436,7 @@ export default function CheckInPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-12">
+    <main className="min-h-screen px-6 py-12" data-testid="check-in-page">
       <div className="mx-auto flex w-full max-w-4xl flex-col gap-6">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
@@ -561,26 +561,31 @@ export default function CheckInPage() {
 
               <label className="block space-y-2 text-sm text-slate-700">
                 <span className="font-medium">Desk QR value</span>
-                <input
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) => setQrCodeValue(event.target.value)}
-                  placeholder="desk_a_01"
-                  value={qrCodeValue}
+              <input
+                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                data-testid="check-in-qr-input"
+                onChange={(event) => setQrCodeValue(event.target.value)}
+                placeholder="desk_a_01"
+                value={qrCodeValue}
                 />
               </label>
 
               <label className="block space-y-2 text-sm text-slate-700">
                 <span className="font-medium">Scan time (for testing)</span>
-                <input
-                  className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) => setScannedAt(event.target.value)}
-                  type="datetime-local"
-                  value={scannedAt}
+              <input
+                className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                data-testid="check-in-scan-time"
+                onChange={(event) => setScannedAt(event.target.value)}
+                type="datetime-local"
+                value={scannedAt}
                 />
               </label>
 
               {matchingWorkspace ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <div
+                  className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700"
+                  data-testid="check-in-matching-workspace"
+                >
                   <p className="font-semibold text-slate-900">
                     Matching workspace: {matchingWorkspace.name}
                   </p>
@@ -591,7 +596,10 @@ export default function CheckInPage() {
               ) : null}
 
               {bookingAtScanTime ? (
-                <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                <div
+                  className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"
+                  data-testid="check-in-booking-match"
+                >
                   <p className="font-semibold text-emerald-900">
                     Booking matched for selected scan time
                   </p>
@@ -610,6 +618,7 @@ export default function CheckInPage() {
 
               <button
                 className="w-full rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                data-testid="check-in-submit"
                 disabled={loading || submitting || !session}
                 onClick={() => void handleSubmit()}
                 type="button"
@@ -626,13 +635,19 @@ export default function CheckInPage() {
               ) : null}
 
               {responseMessage ? (
-                <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                <p
+                  className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                  data-testid="check-in-success"
+                >
                   {responseMessage}
                 </p>
               ) : null}
 
               {errorMessage ? (
-                <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                <p
+                  className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                  data-testid="check-in-error"
+                >
                   {errorMessage}
                 </p>
               ) : null}

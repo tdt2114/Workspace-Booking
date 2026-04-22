@@ -608,6 +608,7 @@ export default function FloorMapPage() {
         label.setAttribute("data-workspace-name", workspace.name);
         label.setAttribute("role", "button");
         label.style.cursor = "pointer";
+        label.style.pointerEvents = "none";
         label.setAttribute("fill", isSelected ? "#0f172a" : "#1E293B");
       });
     });
@@ -763,7 +764,7 @@ export default function FloorMapPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-12">
+    <main className="min-h-screen px-6 py-12" data-testid="floor-map-page">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-wrap items-start justify-between gap-6">
@@ -817,18 +818,21 @@ export default function FloorMapPage() {
               <div className="flex flex-wrap gap-3">
                 <input
                   className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-500 focus:bg-white"
+                  data-testid="floor-map-view-start"
                   onChange={(event) => setViewStart(event.target.value)}
                   type="datetime-local"
                   value={viewStart}
                 />
                 <input
                   className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-500 focus:bg-white"
+                  data-testid="floor-map-view-end"
                   onChange={(event) => setViewEnd(event.target.value)}
                   type="datetime-local"
                   value={viewEnd}
                 />
                 <select
                   className="min-w-64 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-500 focus:bg-white"
+                  data-testid="floor-map-floor-select"
                   disabled={loading || floors.length === 0}
                   onChange={(event) => {
                     setSelectedFloorId(event.target.value);
@@ -877,6 +881,7 @@ export default function FloorMapPage() {
               ) : (
                 <div
                   ref={svgContainerRef}
+                  data-testid="floor-map-svg-container"
                   className="overflow-auto rounded-[1.25rem] bg-white p-4 [&_svg]:h-auto [&_svg]:min-w-[760px] [&_svg]:w-full"
                   dangerouslySetInnerHTML={{ __html: svgMarkup }}
                 />
@@ -942,7 +947,10 @@ export default function FloorMapPage() {
                     <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                       Selected workspace
                     </p>
-                    <p className="text-2xl font-semibold text-slate-900">
+                    <p
+                      className="text-2xl font-semibold text-slate-900"
+                      data-testid="floor-map-selected-workspace-name"
+                    >
                       {selectedWorkspace.name}
                     </p>
                     <p className="text-sm text-slate-600">
@@ -959,7 +967,10 @@ export default function FloorMapPage() {
                     </p>
                     <p className="text-sm text-slate-600">
                       QR code value:{" "}
-                      <code className="rounded bg-white px-1.5 py-0.5 text-slate-800">
+                      <code
+                        className="rounded bg-white px-1.5 py-0.5 text-slate-800"
+                        data-testid="floor-map-selected-workspace-qr"
+                      >
                         {selectedWorkspace.qr_code_value}
                       </code>
                     </p>
@@ -974,6 +985,7 @@ export default function FloorMapPage() {
                         <span className="font-medium">Start time</span>
                         <input
                           className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                          data-testid="floor-map-booking-start"
                           onChange={(event) => setBookingStart(event.target.value)}
                           type="datetime-local"
                           value={bookingStart}
@@ -983,26 +995,40 @@ export default function FloorMapPage() {
                         <span className="font-medium">End time</span>
                         <input
                           className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                          data-testid="floor-map-booking-end"
                           onChange={(event) => setBookingEnd(event.target.value)}
                           type="datetime-local"
                           value={bookingEnd}
                         />
                       </label>
 
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs leading-6 text-slate-600">
+                        Booking policy: at least 15 minutes in advance, from 30
+                        minutes to 8 hours, up to 7 days ahead, and a maximum of
+                        2 active bookings per user.
+                      </div>
+
                       {bookingError ? (
-                        <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                        <p
+                          className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
+                          data-testid="floor-map-booking-error"
+                        >
                           {bookingError}
                         </p>
                       ) : null}
 
                       {bookingSuccess ? (
-                        <p className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
+                        <p
+                          className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
+                          data-testid="floor-map-booking-success"
+                        >
                           {bookingSuccess}
                         </p>
                       ) : null}
 
                       <button
                         className="w-full rounded-full bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                        data-testid="floor-map-create-booking"
                         disabled={
                           bookingLoading ||
                           selectedWorkspace.status !== "available" ||
@@ -1103,7 +1129,7 @@ export default function FloorMapPage() {
                   workspace drawer.
                 </p>
               ) : (
-                <div className="mt-4 space-y-3">
+                <div className="mt-4 space-y-3" data-testid="floor-map-recent-bookings">
                   {(selectedWorkspaceBookings.length > 0
                     ? selectedWorkspaceBookings
                     : bookings.slice(0, 4)

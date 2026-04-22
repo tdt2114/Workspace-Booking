@@ -137,6 +137,9 @@ export default function DashboardPage() {
                 Authenticated user
               </p>
               <p className="text-2xl font-semibold">{session.user.email}</p>
+              <p className="sr-only" data-testid="dashboard-user-email">
+                {session.user.email}
+              </p>
               <p className="text-sm text-slate-300">
                 User ID: {session.user.id}
               </p>
@@ -232,6 +235,7 @@ export default function DashboardPage() {
           <a
             className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
             href="/bookings"
+            data-testid="dashboard-open-bookings"
           >
             Open bookings
           </a>

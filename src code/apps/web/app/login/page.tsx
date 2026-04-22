@@ -172,6 +172,7 @@ export default function LoginPage() {
               <input
                 autoComplete="email"
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400"
+                data-testid="login-email"
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="admin@demo.com"
                 required
@@ -189,6 +190,7 @@ export default function LoginPage() {
                   mode === "sign-in" ? "current-password" : "new-password"
                 }
                 className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-slate-900 outline-none transition focus:border-slate-400"
+                data-testid="login-password"
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Your password"
                 required
@@ -211,6 +213,7 @@ export default function LoginPage() {
 
             <button
               className="w-full rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+              data-testid="login-submit"
               disabled={isSubmitting}
               type="submit"
             >

@@ -8,7 +8,19 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { getSupabaseAdmin } from '../common/supabase.client';
+import { isCheckInWindowExpired } from '../check-in/check-in-window';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
+import {
+  MAX_ACTIVE_BOOKINGS_PER_USER,
+  MAX_BOOKING_ADVANCE_DAYS,
+  MAX_BOOKING_ADVANCE_MS,
+  MAX_BOOKING_DURATION_HOURS,
+  MAX_BOOKING_DURATION_MS,
+  MIN_BOOKING_DURATION_MINUTES,
+  MIN_BOOKING_DURATION_MS,
+  MIN_BOOKING_LEAD_TIME_MINUTES,
+  MIN_BOOKING_LEAD_TIME_MS,
+} from './booking-policy';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { FloorBookingStateDto } from './dto/floor-booking-state.dto';
 import { RunCompletionDto } from './dto/run-completion.dto';
@@ -144,10 +156,48 @@ export class BookingsService {
       throw new BadRequestException('startTime must be earlier than endTime');
     }
 
+    const now = new Date();
+    const durationMs = endTime.getTime() - startTime.getTime();
+
+    if (startTime.getTime() < now.getTime() + MIN_BOOKING_LEAD_TIME_MS) {
+      throw new BadRequestException(
+        `Bookings must be created at least ${MIN_BOOKING_LEAD_TIME_MINUTES} minutes before the start time`,
+      );
+    }
+
+    if (startTime.getTime() > now.getTime() + MAX_BOOKING_ADVANCE_MS) {
+      throw new BadRequestException(
+        `Bookings can only be created up to ${MAX_BOOKING_ADVANCE_DAYS} days in advance`,
+      );
+    }
+
+    if (durationMs < MIN_BOOKING_DURATION_MS) {
+      throw new BadRequestException(
+        `Booking duration must be at least ${MIN_BOOKING_DURATION_MINUTES} minutes`,
+      );
+    }
+
+    if (durationMs > MAX_BOOKING_DURATION_MS) {
+      throw new BadRequestException(
+        `Booking duration must not exceed ${MAX_BOOKING_DURATION_HOURS} hours`,
+      );
+    }
+
     const workspace = await this.findWorkspaceById(dto.workspaceId);
 
     if (workspace.status !== 'available') {
       throw new BadRequestException('Only available workspaces can be booked');
+    }
+
+    const activeBookingCount = await this.countActiveBookingsForUser(
+      user.id,
+      now,
+    );
+
+    if (activeBookingCount >= MAX_ACTIVE_BOOKINGS_PER_USER) {
+      throw new BadRequestException(
+        `Users can only hold ${MAX_ACTIVE_BOOKINGS_PER_USER} active bookings at the same time`,
+      );
     }
 
     const supabaseAdmin = getSupabaseAdmin();
@@ -285,8 +335,8 @@ export class BookingsService {
         'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
       )
       .eq('status', 'confirmed')
-      .lt('end_time', effectiveAt.toISOString())
-      .order('end_time', { ascending: true })
+      .lte('start_time', effectiveAt.toISOString())
+      .order('start_time', { ascending: true })
       .returns<BookingRecord[]>();
 
     if (fetchError) {
@@ -296,7 +346,11 @@ export class BookingsService {
       });
     }
 
-    if (candidates.length === 0) {
+    const overdueCandidates = candidates.filter((booking) =>
+      isCheckInWindowExpired(booking, effectiveAt),
+    );
+
+    if (overdueCandidates.length === 0) {
       return {
         effectiveAt: effectiveAt.toISOString(),
         count: 0,
@@ -304,7 +358,7 @@ export class BookingsService {
       };
     }
 
-    const candidateIds = candidates.map((booking) => booking.id);
+    const candidateIds = overdueCandidates.map((booking) => booking.id);
     const { data, error } = await supabaseAdmin
       .from('bookings')
       .update({
@@ -421,6 +475,26 @@ export class BookingsService {
     }
 
     return data;
+  }
+
+  private async countActiveBookingsForUser(userId: string, now: Date) {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
+      .from('bookings')
+      .select('id')
+      .eq('user_id', userId)
+      .in('status', ['confirmed', 'checked_in'])
+      .gt('end_time', now.toISOString())
+      .returns<WorkspaceIdRecord[]>();
+
+    if (error) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch active user bookings from Supabase',
+        details: error.message,
+      });
+    }
+
+    return data.length;
   }
 
   private handleWriteError(

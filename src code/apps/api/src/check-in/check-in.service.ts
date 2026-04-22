@@ -6,10 +6,8 @@ import {
 } from '@nestjs/common';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { getSupabaseAdmin } from '../common/supabase.client';
+import { isWithinCheckInWindow } from './check-in-window';
 import { ScanCheckInDto } from './dto/scan-check-in.dto';
-
-const CHECK_IN_EARLY_MINUTES = 10;
-const CHECK_IN_LATE_MAX_MINUTES = 30;
 
 type WorkspaceQrRecord = {
   id: string;
@@ -45,7 +43,7 @@ export class CheckInService {
     const workspace = await this.findWorkspaceByQrCode(dto.qrCodeValue.trim());
     const bookings = await this.findCandidateBookings(user.id, workspace.id);
     const matchedBooking = bookings.find((booking) =>
-      this.isWithinCheckInWindow(booking, scannedAt),
+      isWithinCheckInWindow(booking, scannedAt),
     );
 
     if (!matchedBooking) {
@@ -129,24 +127,5 @@ export class CheckInService {
     }
 
     return data;
-  }
-
-  private isWithinCheckInWindow(booking: BookingRecord, scannedAt: Date) {
-    const bookingStart = new Date(booking.start_time);
-    const bookingEnd = new Date(booking.end_time);
-    const checkInOpensAt = new Date(bookingStart);
-    const bookingDurationMs = bookingEnd.getTime() - bookingStart.getTime();
-    const quarterDurationMs = bookingDurationMs / 4;
-    const lateGraceMs = Math.min(
-      quarterDurationMs,
-      CHECK_IN_LATE_MAX_MINUTES * 60 * 1000,
-    );
-    const checkInClosesAt = new Date(bookingStart.getTime() + lateGraceMs);
-
-    checkInOpensAt.setMinutes(
-      checkInOpensAt.getMinutes() - CHECK_IN_EARLY_MINUTES,
-    );
-
-    return scannedAt >= checkInOpensAt && scannedAt <= checkInClosesAt;
   }
 }

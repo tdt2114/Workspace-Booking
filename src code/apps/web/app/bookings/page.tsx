@@ -613,7 +613,7 @@ export default function BookingsPage() {
   }
 
   return (
-    <main className="min-h-screen px-6 py-12">
+    <main className="min-h-screen px-6 py-12" data-testid="bookings-page">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
         <div className="rounded-[2rem] border border-slate-200 bg-white p-8 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
           <div className="flex flex-wrap items-start justify-between gap-6">
@@ -779,7 +779,7 @@ export default function BookingsPage() {
               </p>
             ) : null}
 
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 space-y-4" data-testid="bookings-my-list">
               {filteredBookings.length === 0 ? (
                 <div className="rounded-3xl border border-slate-200 bg-slate-50 p-5 text-sm text-slate-600">
                   No bookings match the current filters yet.
@@ -888,7 +888,13 @@ export default function BookingsPage() {
                 <p className="text-2xl font-semibold">
                   {profile?.email ?? session?.user.email ?? "No active session"}
                 </p>
-                <p className="mt-2 text-sm text-slate-300">
+                <p className="sr-only" data-testid="bookings-current-user-email">
+                  {profile?.email ?? session?.user.email ?? "No active session"}
+                </p>
+                <p
+                  className="mt-2 text-sm text-slate-300"
+                  data-testid="bookings-current-user-role"
+                >
                   Role: {profile?.role ?? "unknown"}
                 </p>
                 <p className="mt-1 text-sm text-slate-300">
@@ -907,7 +913,10 @@ export default function BookingsPage() {
               </p>
 
               {!canRunLifecycle ? (
-                <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                <p
+                  className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
+                  data-testid="bookings-lifecycle-disabled"
+                >
                   This panel is only enabled for manager and admin roles.
                 </p>
               ) : (
@@ -925,6 +934,7 @@ export default function BookingsPage() {
                   <div className="flex flex-wrap gap-3">
                     <button
                       className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:bg-slate-400"
+                      data-testid="bookings-run-no-show"
                       disabled={lifecycleLoading !== null}
                       onClick={() => void handleRunLifecycle("no_show")}
                       type="button"
@@ -936,6 +946,7 @@ export default function BookingsPage() {
 
                     <button
                       className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                      data-testid="bookings-run-completed"
                       disabled={lifecycleLoading !== null}
                       onClick={() => void handleRunLifecycle("completed")}
                       type="button"
@@ -987,7 +998,10 @@ export default function BookingsPage() {
         </div>
 
         {canManageSystemBookings ? (
-          <section className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)]">
+          <section
+            className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.08)]"
+            data-testid="bookings-system-section"
+          >
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
