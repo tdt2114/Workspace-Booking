@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -14,7 +15,7 @@ export default function DashboardPage() {
   const [meError, setMeError] = useState<string | null>(null);
   const [checkingMe, setCheckingMe] = useState(false);
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const apiBaseUrl = useMemo(() => getBrowserApiBaseUrl(), []);
 
   useEffect(() => {
     let mounted = true;
@@ -227,6 +228,18 @@ export default function DashboardPage() {
             href="/login"
           >
             Go to login
+          </a>
+          <a
+            className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+            href="/bookings"
+          >
+            Open bookings
+          </a>
+          <a
+            className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+            href="/workspace-qr"
+          >
+            Open QR manager
           </a>
           <button
             className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"

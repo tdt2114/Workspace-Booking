@@ -51,6 +51,24 @@ export default function Home() {
         <div className="mt-4 grid gap-4 sm:grid-cols-1">
           <a
             className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 transition hover:border-slate-300 hover:bg-slate-100"
+            href="/bookings"
+          >
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">
+              Bookings
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-900">
+              Open Booking Management
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Review booking history, cancel confirmed bookings, and run lifecycle
+              tools from one dedicated screen.
+            </p>
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-1">
+          <a
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 transition hover:border-slate-300 hover:bg-slate-100"
             href="/floor-map"
           >
             <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">
@@ -62,6 +80,42 @@ export default function Home() {
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Load floors and workspaces from the protected API, then bind the
               uploaded SVG map to real `svg_element_id` values.
+            </p>
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-1">
+          <a
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 transition hover:border-slate-300 hover:bg-slate-100"
+            href="/check-in"
+          >
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">
+              Check-in
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-900">
+              Open QR Check-in Prototype
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Test the desk QR check-in flow with a manual QR value before
+              adding a real camera scanner.
+            </p>
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-1">
+          <a
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 transition hover:border-slate-300 hover:bg-slate-100"
+            href="/workspace-qr"
+          >
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">
+              QR Admin
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-900">
+              Open Workspace QR Manager
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Preview and download the static QR image for each desk before
+              printing and placing labels in the office.
             </p>
           </a>
         </div>

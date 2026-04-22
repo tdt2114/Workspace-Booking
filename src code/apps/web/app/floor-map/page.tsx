@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
+import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
 
 type FloorRecord = {
   id: string;
@@ -111,7 +112,7 @@ export default function FloorMapPage() {
   const [selectedWorkspaceId, setSelectedWorkspaceId] = useState<string | null>(
     null,
   );
-  const [svgMarkup, setSvgMarkup] = useState<string | null>(null);
+  const [baseSvgMarkup, setBaseSvgMarkup] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [viewStart, setViewStart] = useState(() => buildDefaultTimeWindow().start);
@@ -124,9 +125,14 @@ export default function FloorMapPage() {
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [floorBookings, setFloorBookings] = useState<BookingRecord[]>([]);
   const [floorStateLoading, setFloorStateLoading] = useState(false);
+  const [floorStateError, setFloorStateError] = useState<string | null>(null);
+  const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [lastRealtimeSyncAt, setLastRealtimeSyncAt] = useState<string | null>(
+    null,
+  );
   const svgContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const apiBaseUrl = useMemo(() => getBrowserApiBaseUrl(), []);
 
   const selectedFloor = useMemo(
     () => floors.find((floor) => floor.id === selectedFloorId) ?? null,
@@ -171,7 +177,7 @@ export default function FloorMapPage() {
     setBookingSuccess(null);
   }, [viewEnd, viewStart]);
 
-  async function loadMyBookings(accessToken: string) {
+  const loadMyBookings = useCallback(async (accessToken: string) => {
     if (!apiBaseUrl) {
       return;
     }
@@ -188,14 +194,14 @@ export default function FloorMapPage() {
 
     const payload = (await response.json()) satisfies BookingsResponse;
     setBookings(payload.items);
-  }
+  }, [apiBaseUrl]);
 
-  async function loadFloorBookings(
+  const loadFloorBookings = useCallback(async (
     accessToken: string,
     floorId: string,
     startTime: string,
     endTime: string,
-  ) {
+  ) => {
     if (!apiBaseUrl) {
       return;
     }
@@ -218,7 +224,36 @@ export default function FloorMapPage() {
 
     const payload = (await response.json()) satisfies BookingsResponse;
     setFloorBookings(payload.items);
-  }
+  }, [apiBaseUrl]);
+
+  const refreshBookingState = useCallback(
+    async (
+      accessToken: string,
+      options?: {
+        floorId?: string;
+        startTime?: string;
+        endTime?: string;
+      },
+    ) => {
+      await loadMyBookings(accessToken);
+
+      if (
+        options?.floorId &&
+        options.startTime &&
+        options.endTime
+      ) {
+        await loadFloorBookings(
+          accessToken,
+          options.floorId,
+          options.startTime,
+          options.endTime,
+        );
+      }
+
+      setLastRealtimeSyncAt(new Date().toISOString());
+    },
+    [loadFloorBookings, loadMyBookings],
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -310,12 +345,31 @@ export default function FloorMapPage() {
           return;
         }
 
+        const startDate = new Date(viewStart);
+        const endDate = new Date(viewEnd);
+
+        if (
+          Number.isNaN(startDate.getTime()) ||
+          Number.isNaN(endDate.getTime())
+        ) {
+          setFloorBookings([]);
+          setFloorStateError(null);
+          return;
+        }
+
+        if (startDate >= endDate) {
+          setFloorBookings([]);
+          setFloorStateError("Start time must be earlier than end time.");
+          return;
+        }
+
         setFloorStateLoading(true);
+        setFloorStateError(null);
 
         const params = new URLSearchParams({
           floorId: selectedFloorId,
-          startTime: new Date(viewStart).toISOString(),
-          endTime: new Date(viewEnd).toISOString(),
+          startTime: startDate.toISOString(),
+          endTime: endDate.toISOString(),
         });
 
         const response = await fetch(`${apiBaseUrl}/bookings/floor-state?${params}`, {
@@ -338,10 +392,11 @@ export default function FloorMapPage() {
         }
 
         setFloorBookings(payload.items);
+        setFloorStateError(null);
       } catch {
         if (mounted) {
           setFloorBookings([]);
-          setErrorMessage(
+          setFloorStateError(
             "Could not load reserved desk state. Check the backend and selected time range.",
           );
         }
@@ -360,23 +415,119 @@ export default function FloorMapPage() {
   }, [apiBaseUrl, selectedFloorId, session, viewEnd, viewStart]);
 
   useEffect(() => {
+    if (!session?.access_token) {
+      return;
+    }
+
+    const channel = supabase
+      .channel(`floor-map-bookings-${session.user.id}-${selectedFloorId || "all"}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookings",
+        },
+        () => {
+          void (async () => {
+            try {
+              await refreshBookingState(session.access_token, {
+                floorId: selectedFloorId,
+                startTime: viewStart,
+                endTime: viewEnd,
+              });
+            } catch {
+              // Keep the current UI state and let explicit API actions surface errors.
+            }
+          })();
+        },
+      )
+      .subscribe((status) => {
+        setRealtimeConnected(status === "SUBSCRIBED");
+      });
+
+    return () => {
+      setRealtimeConnected(false);
+      void supabase.removeChannel(channel);
+    };
+  }, [
+    refreshBookingState,
+    selectedFloorId,
+    session,
+    viewEnd,
+    viewStart,
+  ]);
+
+  useEffect(() => {
+    if (!session?.access_token || !selectedFloorId || !viewStart || !viewEnd) {
+      return;
+    }
+
+    let active = true;
+
+    async function syncVisibleTab() {
+      if (!active || document.visibilityState !== "visible") {
+        return;
+      }
+
+      try {
+        await refreshBookingState(session.access_token, {
+          floorId: selectedFloorId,
+          startTime: viewStart,
+          endTime: viewEnd,
+        });
+      } catch {
+        // Silent fallback: explicit actions and on-screen errors already cover failures.
+      }
+    }
+
+    const intervalId = window.setInterval(() => {
+      void syncVisibleTab();
+    }, 5000);
+
+    function handleVisibilityChange() {
+      void syncVisibleTab();
+    }
+
+    function handleWindowFocus() {
+      void syncVisibleTab();
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [
+    refreshBookingState,
+    selectedFloorId,
+    session,
+    viewEnd,
+    viewStart,
+  ]);
+
+  useEffect(() => {
     let mounted = true;
 
     async function loadSvg() {
       try {
         if (!selectedFloor?.svg_map_url) {
-          setSvgMarkup(null);
+          setBaseSvgMarkup(null);
           setSelectedWorkspaceId(null);
           return;
         }
 
         if (!session || !apiBaseUrl) {
-          setSvgMarkup(null);
+          setBaseSvgMarkup(null);
           return;
         }
 
         setErrorMessage(null);
-        setSvgMarkup(null);
+        setBaseSvgMarkup(null);
 
         const response = await fetch(`${apiBaseUrl}/floors/${selectedFloor.id}/svg`, {
           headers: {
@@ -396,52 +547,7 @@ export default function FloorMapPage() {
         if (!mounted) {
           return;
         }
-
-        const parser = new DOMParser();
-        const parsedDocument = parser.parseFromString(rawSvg, "image/svg+xml");
-
-        filteredWorkspaces.forEach((workspace) => {
-          const target = parsedDocument.getElementById(workspace.svg_element_id);
-
-          if (!target) {
-            return;
-          }
-
-          const hasReservationInView = floorBookings.some(
-            (booking) => booking.workspace_id === workspace.id,
-          );
-          const resolvedStatus: FloorMapStatus = hasReservationInView
-            ? "reserved"
-            : workspace.status;
-          const styles = statusStyleMap[resolvedStatus];
-          const isSelected = workspace.id === selectedWorkspaceId;
-          target.setAttribute("fill", styles.fill);
-          target.setAttribute("stroke", isSelected ? "#0f172a" : styles.stroke);
-          target.setAttribute("stroke-width", isSelected ? "6" : "4");
-          target.setAttribute("data-workspace-id", workspace.id);
-          target.setAttribute("data-workspace-name", workspace.name);
-          target.setAttribute("role", "button");
-          target.style.cursor = "pointer";
-
-          const matchingLabels = Array.from(
-            parsedDocument.querySelectorAll("text"),
-          ).filter(
-            (label) => label.textContent?.trim() === workspace.svg_element_id,
-          );
-
-          matchingLabels.forEach((label) => {
-            label.setAttribute("data-workspace-id", workspace.id);
-            label.setAttribute("data-workspace-name", workspace.name);
-            label.setAttribute("role", "button");
-            label.style.cursor = "pointer";
-            if (isSelected) {
-              label.setAttribute("fill", "#0f172a");
-            }
-          });
-        });
-
-        const serializer = new XMLSerializer();
-        setSvgMarkup(serializer.serializeToString(parsedDocument.documentElement));
+        setBaseSvgMarkup(rawSvg);
       } catch {
         if (mounted) {
           setErrorMessage(
@@ -458,12 +564,57 @@ export default function FloorMapPage() {
     };
   }, [
     apiBaseUrl,
-    filteredWorkspaces,
-    floorBookings,
     selectedFloor,
-    selectedWorkspaceId,
     session,
   ]);
+
+  const svgMarkup = useMemo(() => {
+    if (!baseSvgMarkup) {
+      return null;
+    }
+
+    const parser = new DOMParser();
+    const parsedDocument = parser.parseFromString(baseSvgMarkup, "image/svg+xml");
+
+    filteredWorkspaces.forEach((workspace) => {
+      const target = parsedDocument.getElementById(workspace.svg_element_id);
+
+      if (!target) {
+        return;
+      }
+
+      const hasReservationInView = floorBookings.some(
+        (booking) => booking.workspace_id === workspace.id,
+      );
+      const resolvedStatus: FloorMapStatus = hasReservationInView
+        ? "reserved"
+        : workspace.status;
+      const styles = statusStyleMap[resolvedStatus];
+      const isSelected = workspace.id === selectedWorkspaceId;
+      target.setAttribute("fill", styles.fill);
+      target.setAttribute("stroke", isSelected ? "#0f172a" : styles.stroke);
+      target.setAttribute("stroke-width", isSelected ? "6" : "4");
+      target.setAttribute("data-workspace-id", workspace.id);
+      target.setAttribute("data-workspace-name", workspace.name);
+      target.setAttribute("role", "button");
+      target.style.cursor = "pointer";
+
+      const matchingLabels = Array.from(
+        parsedDocument.querySelectorAll("text"),
+      ).filter((label) => label.textContent?.trim() === workspace.svg_element_id);
+
+      matchingLabels.forEach((label) => {
+        label.setAttribute("data-workspace-id", workspace.id);
+        label.setAttribute("data-workspace-name", workspace.name);
+        label.setAttribute("role", "button");
+        label.style.cursor = "pointer";
+        label.setAttribute("fill", isSelected ? "#0f172a" : "#1E293B");
+      });
+    });
+
+    const serializer = new XMLSerializer();
+    return serializer.serializeToString(parsedDocument.documentElement);
+  }, [baseSvgMarkup, filteredWorkspaces, floorBookings, selectedWorkspaceId]);
 
   useEffect(() => {
     const container = svgContainerRef.current;
@@ -560,15 +711,11 @@ export default function FloorMapPage() {
       }
 
       setBookingSuccess("Booking created successfully.");
-      await loadMyBookings(session.access_token);
-      if (selectedFloorId) {
-        await loadFloorBookings(
-          session.access_token,
-          selectedFloorId,
-          viewStart,
-          viewEnd,
-        );
-      }
+      await refreshBookingState(session.access_token, {
+        floorId: selectedFloorId,
+        startTime: viewStart,
+        endTime: viewEnd,
+      });
     } catch {
       setBookingError("Could not create booking. Check that the backend is running.");
     } finally {
@@ -603,15 +750,11 @@ export default function FloorMapPage() {
       }
 
       setBookingSuccess("Booking cancelled successfully.");
-      await loadMyBookings(session.access_token);
-      if (selectedFloorId) {
-        await loadFloorBookings(
-          session.access_token,
-          selectedFloorId,
-          viewStart,
-          viewEnd,
-        );
-      }
+      await refreshBookingState(session.access_token, {
+        floorId: selectedFloorId,
+        startTime: viewStart,
+        endTime: viewEnd,
+      });
     } catch {
       setBookingError("Could not cancel booking. Check that the backend is running.");
     } finally {
@@ -739,6 +882,12 @@ export default function FloorMapPage() {
                 />
               )}
             </div>
+
+            {floorStateError ? (
+              <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {floorStateError}
+              </p>
+            ) : null}
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
               {Object.entries(statusStyleMap).map(([status, styles]) => (
@@ -918,6 +1067,29 @@ export default function FloorMapPage() {
               <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
                 My recent bookings
               </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                <span
+                  className={`inline-flex items-center gap-2 rounded-full px-3 py-1 ${
+                    realtimeConnected
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  <span
+                    className={`h-2 w-2 rounded-full ${
+                      realtimeConnected ? "bg-emerald-500" : "bg-slate-400"
+                    }`}
+                  />
+                  Realtime {realtimeConnected ? "connected" : "disconnected"}
+                </span>
+
+                {lastRealtimeSyncAt ? (
+                  <span>
+                    Last sync: {formatBookingDate(lastRealtimeSyncAt)}
+                  </span>
+                ) : null}
+              </div>
 
               {floorStateLoading ? (
                 <p className="mt-3 text-sm text-slate-500">

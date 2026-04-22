@@ -11,6 +11,8 @@ import { getSupabaseAdmin } from '../common/supabase.client';
 import { CancelBookingDto } from './dto/cancel-booking.dto';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { FloorBookingStateDto } from './dto/floor-booking-state.dto';
+import { RunCompletionDto } from './dto/run-completion.dto';
+import { RunNoShowDto } from './dto/run-no-show.dto';
 
 type WorkspaceStatusRecord = {
   id: string;
@@ -35,6 +37,17 @@ type BookingRecord = {
   created_at: string;
 };
 
+type UserSummaryRecord = {
+  id: string;
+  email: string;
+  full_name: string | null;
+};
+
+type ManagedBookingRecord = BookingRecord & {
+  user_email: string | null;
+  user_full_name: string | null;
+};
+
 @Injectable()
 export class BookingsService {
   async findMine(userId: string) {
@@ -57,6 +70,63 @@ export class BookingsService {
     return {
       count: data.length,
       items: data as BookingRecord[],
+    };
+  }
+
+  async findManageable() {
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
+      .from('bookings')
+      .select(
+        'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+      )
+      .order('start_time', { ascending: false });
+
+    if (error) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch manageable bookings from Supabase',
+        details: error.message,
+      });
+    }
+
+    const bookings = data as BookingRecord[];
+    const uniqueUserIds = [
+      ...new Set(bookings.map((booking) => booking.user_id)),
+    ];
+
+    if (uniqueUserIds.length === 0) {
+      return {
+        count: 0,
+        items: [] as ManagedBookingRecord[],
+      };
+    }
+
+    const { data: users, error: usersError } = await supabaseAdmin
+      .from('users')
+      .select('id, email, full_name')
+      .in('id', uniqueUserIds)
+      .returns<UserSummaryRecord[]>();
+
+    if (usersError) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch booking user summaries from Supabase',
+        details: usersError.message,
+      });
+    }
+
+    const userLookup = new Map(users.map((user) => [user.id, user] as const));
+
+    return {
+      count: bookings.length,
+      items: bookings.map((booking) => {
+        const matchedUser = userLookup.get(booking.user_id);
+
+        return {
+          ...booking,
+          user_email: matchedUser?.email ?? null,
+          user_full_name: matchedUser?.full_name ?? null,
+        };
+      }),
     };
   }
 
@@ -197,6 +267,128 @@ export class BookingsService {
     }
 
     return data;
+  }
+
+  async runNoShow(dto: RunNoShowDto) {
+    const effectiveAt = dto.effectiveAt
+      ? new Date(dto.effectiveAt)
+      : new Date();
+
+    if (Number.isNaN(effectiveAt.getTime())) {
+      throw new BadRequestException('effectiveAt must be a valid ISO datetime');
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: candidates, error: fetchError } = await supabaseAdmin
+      .from('bookings')
+      .select(
+        'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+      )
+      .eq('status', 'confirmed')
+      .lt('end_time', effectiveAt.toISOString())
+      .order('end_time', { ascending: true })
+      .returns<BookingRecord[]>();
+
+    if (fetchError) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch no-show candidates',
+        details: fetchError.message,
+      });
+    }
+
+    if (candidates.length === 0) {
+      return {
+        effectiveAt: effectiveAt.toISOString(),
+        count: 0,
+        items: [] as BookingRecord[],
+      };
+    }
+
+    const candidateIds = candidates.map((booking) => booking.id);
+    const { data, error } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        status: 'no_show',
+      })
+      .in('id', candidateIds)
+      .select(
+        'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+      )
+      .returns<BookingRecord[]>();
+
+    if (error) {
+      throw new InternalServerErrorException({
+        message: 'Failed to update no-show bookings',
+        details: error.message,
+      });
+    }
+
+    return {
+      effectiveAt: effectiveAt.toISOString(),
+      count: data.length,
+      items: data,
+    };
+  }
+
+  async runCompleted(dto: RunCompletionDto) {
+    const effectiveAt = dto.effectiveAt
+      ? new Date(dto.effectiveAt)
+      : new Date();
+
+    if (Number.isNaN(effectiveAt.getTime())) {
+      throw new BadRequestException('effectiveAt must be a valid ISO datetime');
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: candidates, error: fetchError } = await supabaseAdmin
+      .from('bookings')
+      .select(
+        'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+      )
+      .eq('status', 'checked_in')
+      .lt('end_time', effectiveAt.toISOString())
+      .order('end_time', { ascending: true })
+      .returns<BookingRecord[]>();
+
+    if (fetchError) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch completion candidates',
+        details: fetchError.message,
+      });
+    }
+
+    if (candidates.length === 0) {
+      return {
+        effectiveAt: effectiveAt.toISOString(),
+        count: 0,
+        items: [] as BookingRecord[],
+      };
+    }
+
+    const candidateIds = candidates.map((booking) => booking.id);
+    const { data, error } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        status: 'completed',
+      })
+      .in('id', candidateIds)
+      .select(
+        'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+      )
+      .returns<BookingRecord[]>();
+
+    if (error) {
+      throw new InternalServerErrorException({
+        message: 'Failed to update completed bookings',
+        details: error.message,
+      });
+    }
+
+    return {
+      effectiveAt: effectiveAt.toISOString(),
+      count: data.length,
+      items: data,
+    };
   }
 
   private async findWorkspaceById(id: string) {
