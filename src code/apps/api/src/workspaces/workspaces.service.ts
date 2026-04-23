@@ -151,6 +151,22 @@ export class WorkspacesService {
       );
     }
 
+    if (error?.code === '23514') {
+      const detail = `${error.message} ${error.details ?? ''}`;
+
+      if (detail.includes('workspaces_type_check')) {
+        throw new BadRequestException(
+          'Workspace type is not enabled in the database. Run supabase/04_expand_workspace_types.sql, then retry.',
+        );
+      }
+
+      if (detail.includes('workspaces_status_check')) {
+        throw new BadRequestException(
+          'Workspace status is not enabled in the database. Run supabase/04_expand_workspace_types.sql, then retry.',
+        );
+      }
+    }
+
     throw new InternalServerErrorException({
       message: fallbackMessage,
       details: error?.message,

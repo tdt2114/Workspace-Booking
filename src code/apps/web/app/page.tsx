@@ -96,7 +96,7 @@ export default function Home() {
               Open QR Check-in Prototype
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Test the desk QR check-in flow with a manual QR value before
+              Test the workspace QR check-in flow with a manual QR value before
               adding a real camera scanner.
             </p>
           </a>
@@ -114,8 +114,26 @@ export default function Home() {
               Open Workspace QR Manager
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
-              Preview and download the static QR image for each desk before
+              Preview and download the static QR image for each workspace before
               printing and placing labels in the office.
+            </p>
+          </a>
+        </div>
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-1">
+          <a
+            className="rounded-2xl border border-slate-200 bg-slate-50 px-5 py-5 transition hover:border-slate-300 hover:bg-slate-100"
+            href="/admin/setup"
+          >
+            <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">
+              Admin Setup
+            </p>
+            <h2 className="mt-2 text-xl font-semibold text-slate-900">
+              Open Operations Setup Screen
+            </h2>
+            <p className="mt-2 text-sm leading-6 text-slate-600">
+              Manage buildings, floors, workspaces, and SVG uploads from a single
+              prototype screen for admin and manager accounts.
             </p>
           </a>
         </div>

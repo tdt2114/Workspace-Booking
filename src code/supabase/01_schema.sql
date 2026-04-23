@@ -46,9 +46,10 @@ create table if not exists public.workspaces (
   id uuid primary key default gen_random_uuid(),
   floor_id uuid not null references public.floors(id) on delete cascade,
   name text not null,
-  type text not null default 'desk' check (type in ('desk')),
+  type text not null default 'desk'
+    check (type in ('desk', 'meeting_room', 'focus_room', 'lab', 'room', 'parking')),
   status text not null default 'available'
-    check (status in ('available', 'maintenance')),
+    check (status in ('available', 'maintenance', 'inactive')),
   svg_element_id text not null,
   qr_code_value text not null unique,
   capacity integer not null default 1 check (capacity >= 1),

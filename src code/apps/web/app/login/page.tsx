@@ -1,13 +1,16 @@
 "use client";
 
 import { FormEvent, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { getSafeRedirectTo } from "@/lib/auth-redirect";
 
 type Mode = "sign-in" | "sign-up";
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const redirectTo = getSafeRedirectTo(searchParams.get("redirectTo"));
   const [mode, setMode] = useState<Mode>("sign-in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -40,7 +43,7 @@ export default function LoginPage() {
       }
 
       setMessage("Signed in successfully.");
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
       setIsSubmitting(false);
       return;
@@ -64,7 +67,7 @@ export default function LoginPage() {
 
     if (data.session) {
       setMessage("Account created and signed in successfully.");
-      router.push("/dashboard");
+      router.push(redirectTo);
       router.refresh();
       setIsSubmitting(false);
       return;

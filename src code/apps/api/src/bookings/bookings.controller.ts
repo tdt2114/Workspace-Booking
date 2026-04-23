@@ -60,6 +60,14 @@ export class BookingsController {
     return this.bookingsService.cancel(id, user, dto);
   }
 
+  @Patch(':id/release')
+  release(
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.bookingsService.release(id, user);
+  }
+
   @Post('run-no-show')
   @UseGuards(RolesGuard)
   @Roles('admin', 'manager')

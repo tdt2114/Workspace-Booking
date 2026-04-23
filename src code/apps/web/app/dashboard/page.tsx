@@ -245,6 +245,12 @@ export default function DashboardPage() {
           >
             Open QR manager
           </a>
+          <a
+            className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+            href="/admin/setup"
+          >
+            Open admin setup
+          </a>
           <button
             className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
             onClick={() => void handleSignOut()}

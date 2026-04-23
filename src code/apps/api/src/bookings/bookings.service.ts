@@ -189,6 +189,8 @@ export class BookingsService {
       throw new BadRequestException('Only available workspaces can be booked');
     }
 
+    await this.releaseExpiredBookings(now);
+
     const activeBookingCount = await this.countActiveBookingsForUser(
       user.id,
       now,
@@ -312,6 +314,42 @@ export class BookingsService {
     if (error || !data) {
       throw new InternalServerErrorException({
         message: 'Failed to cancel booking',
+        details: error?.message,
+      });
+    }
+
+    return data;
+  }
+
+  async release(id: string, user: AuthenticatedUser) {
+    const booking = await this.findBookingById(id);
+    const canManageAnyBooking = ['admin', 'manager'].includes(user.role);
+
+    if (!canManageAnyBooking && booking.user_id !== user.id) {
+      throw new ForbiddenException('You can only release your own bookings');
+    }
+
+    if (booking.status !== 'checked_in') {
+      throw new BadRequestException(
+        'Only checked-in bookings can be released',
+      );
+    }
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data, error } = await supabaseAdmin
+      .from('bookings')
+      .update({
+        status: 'completed',
+      })
+      .eq('id', id)
+      .select(
+        'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+      )
+      .single<BookingRecord>();
+
+    if (error || !data) {
+      throw new InternalServerErrorException({
+        message: 'Failed to release booking',
         details: error?.message,
       });
     }
@@ -495,6 +533,15 @@ export class BookingsService {
     }
 
     return data.length;
+  }
+
+  private async releaseExpiredBookings(effectiveAt: Date) {
+    const lifecycleDto = {
+      effectiveAt: effectiveAt.toISOString(),
+    };
+
+    await this.runNoShow(lifecycleDto);
+    await this.runCompleted(lifecycleDto);
   }
 
   private handleWriteError(

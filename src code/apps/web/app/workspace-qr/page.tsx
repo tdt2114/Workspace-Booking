@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
+import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 
 type AuthProfile = {
   id: string;
@@ -32,7 +34,7 @@ type WorkspaceRecord = {
   floor_id: string;
   name: string;
   type: string;
-  status: "available" | "maintenance";
+  status: "available" | "maintenance" | "inactive";
   svg_element_id: string;
   qr_code_value: string;
   capacity: number;
@@ -45,6 +47,7 @@ type WorkspacesResponse = {
 };
 
 export default function WorkspaceQrPage() {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [floors, setFloors] = useState<FloorRecord[]>([]);
@@ -99,6 +102,9 @@ export default function WorkspaceQrPage() {
     void supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       if (mounted) {
         setSession(currentSession);
+        if (!currentSession) {
+          router.replace(buildLoginRedirectUrl());
+        }
       }
     });
 
@@ -106,7 +112,7 @@ export default function WorkspaceQrPage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let mounted = true;
@@ -283,7 +289,7 @@ export default function WorkspaceQrPage() {
     context.fillStyle = "#64748b";
     context.font = "400 22px Arial";
     context.fillText(
-      "Print and attach this label to the matching desk.",
+      "Print and attach this label to the matching workspace.",
       canvas.width / 2,
       760,
     );
@@ -307,7 +313,7 @@ export default function WorkspaceQrPage() {
                 Static QR Management
               </span>
               <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-                Generate, review, and download desk QR codes for printing.
+                Generate, review, and download workspace QR codes for printing.
               </h1>
               <p className="max-w-3xl text-base leading-7 text-slate-600">
                 This screen turns each workspace
@@ -315,7 +321,7 @@ export default function WorkspaceQrPage() {
                   qr_code_value
                 </code>
                 into a printable QR image. It supports the current MVP model where
-                each desk keeps one static QR label.
+                each workspace keeps one static QR label.
               </p>
             </div>
 
@@ -350,7 +356,7 @@ export default function WorkspaceQrPage() {
                   Workspace QR list
                 </p>
                 <p className="mt-2 text-sm text-slate-600">
-                  Filter by floor or search by desk name, SVG id, or QR value.
+                  Filter by floor or search by workspace name, SVG id, or QR value.
                 </p>
               </div>
 
@@ -371,7 +377,7 @@ export default function WorkspaceQrPage() {
                 <input
                   className="min-w-64 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-500 focus:bg-white"
                   onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Search desk_a_01, Desk A-01..."
+                  placeholder="Search workspace_a_01, Desk A-01..."
                   value={searchText}
                 />
               </div>
@@ -507,11 +513,11 @@ export default function WorkspaceQrPage() {
                 <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-4 text-sm leading-7 text-slate-600">
                   <p className="font-semibold text-slate-900">Print note</p>
                   <p className="mt-2">
-                    Print this QR and place it on the physical desk that matches
+                    Print this QR and place it on the physical workspace that matches
                     <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-800">
                       {selectedWorkspace.name}
                     </code>
-                    . The check-in prototype currently expects the static desk QR
+                    . The check-in prototype currently expects the static workspace QR
                     value, not a booking-specific QR.
                   </p>
                 </div>

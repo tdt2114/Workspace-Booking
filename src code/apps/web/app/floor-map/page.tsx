@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
+import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 
 type FloorRecord = {
   id: string;
@@ -24,7 +26,7 @@ type WorkspaceRecord = {
   floor_id: string;
   name: string;
   type: string;
-  status: "available" | "maintenance";
+  status: "available" | "maintenance" | "inactive";
   svg_element_id: string;
   qr_code_value: string;
   capacity: number;
@@ -70,6 +72,11 @@ const statusStyleMap: Record<
     stroke: "#8a5b00",
     label: "Maintenance",
   },
+  inactive: {
+    fill: "#e5e7eb",
+    stroke: "#64748b",
+    label: "Inactive",
+  },
   reserved: {
     fill: "#dce6fb",
     stroke: "#31598f",
@@ -104,6 +111,7 @@ function buildDefaultTimeWindow() {
 }
 
 export default function FloorMapPage() {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [floors, setFloors] = useState<FloorRecord[]>([]);
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([]);
@@ -121,6 +129,7 @@ export default function FloorMapPage() {
   const [bookingEnd, setBookingEnd] = useState(() => buildDefaultTimeWindow().end);
   const [bookingLoading, setBookingLoading] = useState(false);
   const [cancelLoadingId, setCancelLoadingId] = useState<string | null>(null);
+  const [releaseLoadingId, setReleaseLoadingId] = useState<string | null>(null);
   const [bookingError, setBookingError] = useState<string | null>(null);
   const [bookingSuccess, setBookingSuccess] = useState<string | null>(null);
   const [floorBookings, setFloorBookings] = useState<BookingRecord[]>([]);
@@ -168,6 +177,17 @@ export default function FloorMapPage() {
       floorBookings.filter((booking) => booking.workspace_id === selectedWorkspaceId),
     [floorBookings, selectedWorkspaceId],
   );
+
+  const selectedWorkspaceOwnReservationsInView = useMemo(
+    () =>
+      selectedWorkspaceReservedBookings.filter(
+        (booking) => booking.user_id === session?.user.id,
+      ),
+    [selectedWorkspaceReservedBookings, session?.user.id],
+  );
+
+  const selectedWorkspaceReservedByCurrentUser =
+    selectedWorkspaceOwnReservationsInView.length > 0;
 
   const applyWorkspaceSelection = useCallback((workspaceId: string) => {
     setSelectedWorkspaceId(workspaceId);
@@ -272,7 +292,7 @@ export default function FloorMapPage() {
 
         if (!currentSession) {
           if (mounted) {
-            setErrorMessage("Please sign in before opening the floor map.");
+            router.replace(buildLoginRedirectUrl());
             setLoading(false);
           }
           return;
@@ -330,7 +350,7 @@ export default function FloorMapPage() {
     return () => {
       mounted = false;
     };
-  }, [apiBaseUrl]);
+  }, [apiBaseUrl, router]);
 
   useEffect(() => {
     let mounted = true;
@@ -380,7 +400,9 @@ export default function FloorMapPage() {
 
         if (!response.ok) {
           if (mounted) {
-            setErrorMessage("Failed to load reserved desk state for the selected time range.");
+            setErrorMessage(
+              "Failed to load reserved workspace state for the selected time range.",
+            );
           }
           return;
         }
@@ -397,7 +419,7 @@ export default function FloorMapPage() {
         if (mounted) {
           setFloorBookings([]);
           setFloorStateError(
-            "Could not load reserved desk state. Check the backend and selected time range.",
+            "Could not load reserved workspace state. Check the backend and selected time range.",
           );
         }
       } finally {
@@ -681,6 +703,18 @@ export default function FloorMapPage() {
     };
   }, [applyWorkspaceSelection, filteredWorkspaces, svgMarkup]);
 
+  function handleBookingStartChange(value: string) {
+    setBookingStart(value);
+    setBookingError(null);
+    setBookingSuccess(null);
+  }
+
+  function handleBookingEndChange(value: string) {
+    setBookingEnd(value);
+    setBookingError(null);
+    setBookingSuccess(null);
+  }
+
   async function handleCreateBooking() {
     if (!selectedWorkspace || !session || !apiBaseUrl) {
       return;
@@ -763,6 +797,46 @@ export default function FloorMapPage() {
     }
   }
 
+  async function handleReleaseBooking(bookingId: string) {
+    if (!session || !apiBaseUrl) {
+      return;
+    }
+
+    setBookingError(null);
+    setBookingSuccess(null);
+    setReleaseLoadingId(bookingId);
+
+    try {
+      const response = await fetch(
+        `${apiBaseUrl}/bookings/${bookingId}/release`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const payload = (await response.json()) as { message?: string };
+
+      if (!response.ok) {
+        setBookingError(payload.message ?? "Failed to release workspace.");
+        return;
+      }
+
+      setBookingSuccess("Workspace released successfully.");
+      await refreshBookingState(session.access_token, {
+        floorId: selectedFloorId,
+        startTime: viewStart,
+        endTime: viewEnd,
+      });
+    } catch {
+      setBookingError("Could not release workspace. Check that the backend is running.");
+    } finally {
+      setReleaseLoadingId(null);
+    }
+  }
+
   return (
     <main className="min-h-screen px-6 py-12" data-testid="floor-map-page">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -811,7 +885,7 @@ export default function FloorMapPage() {
                 </p>
                 <p className="mt-2 text-sm text-slate-600">
                   Pick a floor with an uploaded SVG map, then choose a time window
-                  to visualize bound workspaces and reserved desks.
+                  to visualize bound workspaces and reserved spaces.
                 </p>
               </div>
 
@@ -986,7 +1060,7 @@ export default function FloorMapPage() {
                         <input
                           className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
                           data-testid="floor-map-booking-start"
-                          onChange={(event) => setBookingStart(event.target.value)}
+                          onChange={(event) => handleBookingStartChange(event.target.value)}
                           type="datetime-local"
                           value={bookingStart}
                         />
@@ -996,7 +1070,7 @@ export default function FloorMapPage() {
                         <input
                           className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
                           data-testid="floor-map-booking-end"
-                          onChange={(event) => setBookingEnd(event.target.value)}
+                          onChange={(event) => handleBookingEndChange(event.target.value)}
                           type="datetime-local"
                           value={bookingEnd}
                         />
@@ -1046,6 +1120,25 @@ export default function FloorMapPage() {
                         <p className="text-sm text-amber-700">
                           This workspace is not available for booking.
                         </p>
+                      ) : selectedWorkspaceReservedByCurrentUser ? (
+                        <div className="space-y-2">
+                          <p className="text-sm text-emerald-700">
+                            You already have this workspace reserved in the selected time range.
+                          </p>
+                          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                            <p className="font-semibold">Your matching reservation</p>
+                            <div className="mt-2 space-y-2">
+                              {selectedWorkspaceOwnReservationsInView.map((booking) => (
+                                <div key={booking.id}>
+                                  <p>{formatBookingDate(booking.start_time)} - {formatBookingDate(booking.end_time)}</p>
+                                  <p className="text-xs text-emerald-800">
+                                    Status: {booking.status}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
                       ) : selectedWorkspaceReservedInView ? (
                         <div className="space-y-2">
                           <p className="text-sm text-amber-700">
@@ -1075,7 +1168,7 @@ export default function FloorMapPage() {
                     Selected workspace
                   </p>
                   <p className="text-lg font-semibold text-slate-900">
-                    Click a highlighted desk on the map.
+                    Click a highlighted workspace on the map.
                   </p>
                   <p className="text-sm leading-6 text-slate-600">
                     The page will match the clicked SVG element to a workspace
@@ -1119,7 +1212,7 @@ export default function FloorMapPage() {
 
               {floorStateLoading ? (
                 <p className="mt-3 text-sm text-slate-500">
-                  Refreshing reserved desk state for the selected time range...
+                  Refreshing reserved workspace state for the selected time range...
                 </p>
               ) : null}
 
@@ -1163,6 +1256,19 @@ export default function FloorMapPage() {
                           {cancelLoadingId === booking.id
                             ? "Cancelling..."
                             : "Cancel booking"}
+                        </button>
+                      ) : null}
+
+                      {booking.status === "checked_in" ? (
+                        <button
+                          className="mt-3 rounded-full border border-emerald-300 px-3 py-2 text-xs font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          disabled={releaseLoadingId === booking.id}
+                          onClick={() => void handleReleaseBooking(booking.id)}
+                          type="button"
+                        >
+                          {releaseLoadingId === booking.id
+                            ? "Releasing..."
+                            : "Release workspace"}
                         </button>
                       ) : null}
                     </div>

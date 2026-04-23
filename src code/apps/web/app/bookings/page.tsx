@@ -2,9 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
+import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 
 type AuthProfile = {
   id: string;
@@ -31,7 +33,7 @@ type WorkspaceRecord = {
   floor_id: string;
   name: string;
   type: string;
-  status: "available" | "maintenance";
+  status: "available" | "maintenance" | "inactive";
   svg_element_id: string;
   qr_code_value: string;
   capacity: number;
@@ -111,6 +113,7 @@ function buildDefaultEffectiveAt() {
 }
 
 export default function BookingsPage() {
+  const router = useRouter();
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<AuthProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -130,6 +133,7 @@ export default function BookingsPage() {
   const [managedStartDate, setManagedStartDate] = useState("");
   const [managedEndDate, setManagedEndDate] = useState("");
   const [cancelLoadingId, setCancelLoadingId] = useState<string | null>(null);
+  const [releaseLoadingId, setReleaseLoadingId] = useState<string | null>(null);
   const [pageMessage, setPageMessage] = useState<string | null>(null);
   const [effectiveAt, setEffectiveAt] = useState(buildDefaultEffectiveAt());
   const [lifecycleLoading, setLifecycleLoading] = useState<
@@ -316,6 +320,9 @@ export default function BookingsPage() {
       if (mounted) {
         setSession(currentSession);
         setLoading(false);
+        if (!currentSession) {
+          router.replace(buildLoginRedirectUrl());
+        }
       }
     });
 
@@ -323,7 +330,7 @@ export default function BookingsPage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     let mounted = true;
@@ -541,6 +548,50 @@ export default function BookingsPage() {
     }
   }
 
+  async function handleReleaseBooking(bookingId: string) {
+    if (!session?.access_token) {
+      setErrorMessage("Please sign in before releasing a workspace.");
+      return;
+    }
+
+    const apiBaseUrl = getBrowserApiBaseUrl();
+
+    if (!apiBaseUrl) {
+      setErrorMessage("Missing API base URL.");
+      return;
+    }
+
+    try {
+      setReleaseLoadingId(bookingId);
+      setErrorMessage(null);
+      setPageMessage(null);
+
+      const response = await fetch(
+        `${apiBaseUrl}/bookings/${bookingId}/release`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        },
+      );
+
+      const payload = (await response.json()) as { message?: string };
+
+      if (!response.ok) {
+        setErrorMessage(payload.message ?? "Failed to release workspace.");
+        return;
+      }
+
+      setPageMessage("Workspace released successfully.");
+      await refreshPageData();
+    } catch {
+      setErrorMessage("Could not release workspace right now.");
+    } finally {
+      setReleaseLoadingId(null);
+    }
+  }
+
   async function handleRunLifecycle(mode: "no_show" | "completed") {
     if (!session?.access_token || !canRunLifecycle) {
       return;
@@ -719,7 +770,7 @@ export default function BookingsPage() {
                   My bookings
                 </p>
                 <p className="mt-2 text-sm text-slate-600">
-                  Filter by status, search by desk or QR value, then cancel any
+                  Filter by status, search by workspace or QR value, then cancel any
                   confirmed booking directly from this list.
                 </p>
               </div>
@@ -742,7 +793,7 @@ export default function BookingsPage() {
                 <input
                   className="min-w-64 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-500 focus:bg-white"
                   onChange={(event) => setSearchText(event.target.value)}
-                  placeholder="Search Desk A-01, desk_a_01..."
+                  placeholder="Search Desk A-01, workspace_a_01..."
                   value={searchText}
                 />
 
@@ -858,6 +909,19 @@ export default function BookingsPage() {
                             {cancelLoadingId === booking.id
                               ? "Cancelling..."
                               : "Cancel booking"}
+                          </button>
+                        ) : null}
+
+                        {booking.status === "checked_in" ? (
+                          <button
+                            className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={releaseLoadingId === booking.id}
+                            onClick={() => void handleReleaseBooking(booking.id)}
+                            type="button"
+                          >
+                            {releaseLoadingId === booking.id
+                              ? "Releasing..."
+                              : "Release workspace"}
                           </button>
                         ) : null}
 
@@ -1073,7 +1137,7 @@ export default function BookingsPage() {
               <input
                 className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-800 outline-none transition focus:border-slate-500 focus:bg-white"
                 onChange={(event) => setManagedSearchText(event.target.value)}
-                placeholder="Search email, desk, QR, SVG..."
+                placeholder="Search email, workspace, QR, SVG..."
                 value={managedSearchText}
               />
             </div>
@@ -1180,6 +1244,19 @@ export default function BookingsPage() {
                             {cancelLoadingId === booking.id
                               ? "Cancelling..."
                               : "Cancel as manager"}
+                          </button>
+                        ) : null}
+
+                        {booking.status === "checked_in" ? (
+                          <button
+                            className="rounded-full border border-emerald-300 px-4 py-2 text-sm font-semibold text-emerald-700 transition hover:border-emerald-400 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            disabled={releaseLoadingId === booking.id}
+                            onClick={() => void handleReleaseBooking(booking.id)}
+                            type="button"
+                          >
+                            {releaseLoadingId === booking.id
+                              ? "Releasing..."
+                              : "Release as manager"}
                           </button>
                         ) : null}
 

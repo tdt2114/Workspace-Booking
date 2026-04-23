@@ -2,17 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
+import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 
 type WorkspaceRecord = {
   id: string;
   floor_id: string;
   name: string;
   type: string;
-  status: "available" | "maintenance";
+  status: "available" | "maintenance" | "inactive";
   svg_element_id: string;
   qr_code_value: string;
   capacity: number;
@@ -109,6 +110,7 @@ function getClientBrowserEnvironmentSnapshot() {
 }
 
 export default function CheckInPage() {
+  const router = useRouter();
   const scannerRegionId = "check-in-camera-region";
   const searchParams = useSearchParams();
   const [session, setSession] = useState<Session | null>(null);
@@ -193,6 +195,9 @@ export default function CheckInPage() {
       if (mounted) {
         setSession(currentSession);
         setLoading(false);
+        if (!currentSession) {
+          router.replace(buildLoginRedirectUrl());
+        }
       }
     });
 
@@ -200,7 +205,7 @@ export default function CheckInPage() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     return () => {
@@ -425,7 +430,7 @@ export default function CheckInPage() {
 
       setCameraActive(true);
       setCameraLoading(false);
-      setCameraStatus("Camera is live. Point it at a desk QR code.");
+      setCameraStatus("Camera is live. Point it at a workspace QR code.");
     } catch {
       await stopCamera();
       setCameraError(
@@ -445,10 +450,10 @@ export default function CheckInPage() {
                 QR Check-in Prototype
               </span>
               <h1 className="text-4xl font-semibold tracking-tight text-slate-900">
-                Test desk check-in before wiring a real camera scanner.
+                Test workspace check-in before wiring a real camera scanner.
               </h1>
               <p className="max-w-3xl text-base leading-7 text-slate-600">
-                This page simulates scanning a static desk QR by sending
+                This page simulates scanning a static workspace QR by sending
                 <code className="mx-1 rounded bg-slate-100 px-1.5 py-0.5 text-slate-800">
                   qrCodeValue
                 </code>
@@ -560,7 +565,7 @@ export default function CheckInPage() {
               </div>
 
               <label className="block space-y-2 text-sm text-slate-700">
-                <span className="font-medium">Desk QR value</span>
+                <span className="font-medium">Workspace QR value</span>
               <input
                 className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
                 data-testid="check-in-qr-input"
@@ -611,7 +616,7 @@ export default function CheckInPage() {
                 </div>
               ) : matchingWorkspace ? (
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  No confirmed or checked-in booking for this desk at the selected
+                  No confirmed or checked-in booking for this workspace at the selected
                   scan time.
                 </div>
               ) : null}
@@ -661,7 +666,7 @@ export default function CheckInPage() {
 
             <div className="mt-5 space-y-3 text-sm leading-7 text-slate-600">
               <p>1. Sign in with a user that has a confirmed booking.</p>
-              <p>2. Enter the matching desk QR value, for example <code className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-800">desk_a_01</code>.</p>
+              <p>2. Enter the matching workspace QR value, for example <code className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-800">desk_a_01</code>.</p>
               <p>3. Use a scan time that falls inside the booking window.</p>
               <p>4. The backend should update the booking status to <code className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-800">checked_in</code>.</p>
             </div>
