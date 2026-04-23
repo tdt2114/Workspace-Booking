@@ -1070,6 +1070,18 @@ export default function AdminSetupPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Upload one SVG floor map and attach it directly to the selected floor.
               </p>
+              <div className="mt-4 rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+                <p className="font-semibold">Important before uploading a new SVG</p>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-6 text-amber-800">
+                  <li>The selected floor keeps only one active SVG map reference at a time.</li>
+                  <li>Uploading a new file replaces the current map used by the floor map page.</li>
+                  <li>Uploading an SVG does not create workspaces automatically.</li>
+                  <li>
+                    Clickable areas only work when the SVG element <code>id</code> matches a
+                    workspace <code>svg_element_id</code>.
+                  </li>
+                </ul>
+              </div>
 
               <form className="mt-5 space-y-4" onSubmit={(event) => void handleSvgUpload(event)}>
                 <label className="block space-y-2 text-sm text-slate-700">
@@ -1109,9 +1121,8 @@ export default function AdminSetupPage() {
                       {selectedSvgFloor.svg_map_url ?? "No svg_map_url attached yet."}
                     </p>
                     {selectedSvgFloor.svg_map_url ? (
-                      <p className="mt-2 text-xs font-medium">
-                        Uploading a new file will replace the active map reference for this
-                        floor.
+                      <p className="mt-2 text-xs font-semibold uppercase tracking-[0.12em]">
+                        Uploading a new file will replace the active SVG map for this floor.
                       </p>
                     ) : null}
                   </div>
@@ -1149,6 +1160,11 @@ export default function AdminSetupPage() {
                     <p className="mt-2 text-sm leading-6 text-slate-600">
                       The floor map only becomes clickable when an SVG element id
                       matches a workspace <code>svg_element_id</code> on the same floor.
+                    </p>
+                    <p className="mt-2 text-xs leading-5 text-slate-500">
+                      Use <span className="font-semibold">Prepare workspace</span> to prefill the
+                      workspace form from an unmapped SVG id, then save the matching workspace
+                      record below.
                     </p>
                   </div>
                   <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
@@ -1503,6 +1519,11 @@ export default function AdminSetupPage() {
                     Manage bookable spaces, SVG ids, static QR values, and workspace
                     status.
                   </p>
+                  <p className="mt-2 text-xs leading-5 text-slate-500">
+                    For the floor map to work correctly, the workspace name is only a display
+                    label. The actual binding is driven by <code>svg_element_id</code> and the
+                    static <code>qr_code_value</code>.
+                  </p>
                 </div>
                 <button
                   className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
@@ -1514,98 +1535,154 @@ export default function AdminSetupPage() {
               </div>
 
               <form className="mt-5 grid gap-3 lg:grid-cols-2" onSubmit={(event) => void handleWorkspaceSubmit(event)}>
-                <select
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({ ...current, floorId: event.target.value }))
-                  }
-                  value={workspaceForm.floorId}
-                >
-                  <option value="">Select floor</option>
-                  {floorsWithBuilding.map((floor) => (
-                    <option key={floor.id} value={floor.id}>
-                      {floor.buildingName} - {floor.name ?? `Floor ${floor.floor_number}`}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({ ...current, name: event.target.value }))
-                  }
-                  placeholder="Desk A-01"
-                  value={workspaceForm.name}
-                />
-                <select
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({ ...current, type: event.target.value }))
-                  }
-                  value={workspaceForm.type}
-                >
-                  <option value="desk">desk</option>
-                  <option value="meeting_room">meeting_room</option>
-                  <option value="focus_room">focus_room</option>
-                  <option value="lab">lab</option>
-                  <option value="room">room</option>
-                  <option value="parking">parking</option>
-                </select>
-                <select
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({ ...current, status: event.target.value }))
-                  }
-                  value={workspaceForm.status}
-                >
-                  <option value="available">available</option>
-                  <option value="maintenance">maintenance</option>
-                  <option value="inactive">inactive</option>
-                </select>
-                <input
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({
-                      ...current,
-                      svgElementId: event.target.value,
-                    }))
-                  }
-                  placeholder="desk_a_01"
-                  value={workspaceForm.svgElementId}
-                />
-                <input
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({
-                      ...current,
-                      qrCodeValue: event.target.value,
-                    }))
-                  }
-                  placeholder="desk_a_01"
-                  value={workspaceForm.qrCodeValue}
-                />
-                <input
-                  className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
-                  min={1}
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({
-                      ...current,
-                      capacity: event.target.value,
-                    }))
-                  }
-                  type="number"
-                  value={workspaceForm.capacity}
-                />
-                <textarea
-                  className="min-h-32 rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 font-mono text-sm outline-none transition focus:border-slate-500 focus:bg-white lg:col-span-2"
-                  onChange={(event) =>
-                    setWorkspaceForm((current) => ({
-                      ...current,
-                      features: event.target.value,
-                    }))
-                  }
-                  placeholder={`{\n  "monitor": true\n}`}
-                  value={workspaceForm.features}
-                />
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">Floor</span>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({ ...current, floorId: event.target.value }))
+                    }
+                    value={workspaceForm.floorId}
+                  >
+                    <option value="">Select floor</option>
+                    {floorsWithBuilding.map((floor) => (
+                      <option key={floor.id} value={floor.id}>
+                        {floor.buildingName} - {floor.name ?? `Floor ${floor.floor_number}`}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    Choose the floor that owns this workspace.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">Workspace display name</span>
+                  <input
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({ ...current, name: event.target.value }))
+                    }
+                    placeholder="Desk A-01"
+                    value={workspaceForm.name}
+                  />
+                  <p className="text-xs text-slate-500">
+                    This is the label users see in the UI.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">Workspace type</span>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({ ...current, type: event.target.value }))
+                    }
+                    value={workspaceForm.type}
+                  >
+                    <option value="desk">desk</option>
+                    <option value="meeting_room">meeting_room</option>
+                    <option value="focus_room">focus_room</option>
+                    <option value="lab">lab</option>
+                    <option value="room">room</option>
+                    <option value="parking">parking</option>
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    Use <code>desk</code> for single seats, or choose room/lab/meeting_room for
+                    larger bookable spaces.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">Workspace status</span>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({ ...current, status: event.target.value }))
+                    }
+                    value={workspaceForm.status}
+                  >
+                    <option value="available">available</option>
+                    <option value="maintenance">maintenance</option>
+                    <option value="inactive">inactive</option>
+                  </select>
+                  <p className="text-xs text-slate-500">
+                    Inactive spaces stay in the system but should not be used for live booking.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">SVG element id</span>
+                  <input
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({
+                        ...current,
+                        svgElementId: event.target.value,
+                      }))
+                    }
+                    placeholder="desk_a_01"
+                    value={workspaceForm.svgElementId}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Must match the SVG <code>id</code> exactly for click binding on the floor map.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">Static QR value</span>
+                  <input
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({
+                        ...current,
+                        qrCodeValue: event.target.value,
+                      }))
+                    }
+                    placeholder="desk_a_01"
+                    value={workspaceForm.qrCodeValue}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Current MVP uses one fixed QR per workspace for check-in.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700">
+                  <span className="font-medium">Capacity</span>
+                  <input
+                    className="w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 outline-none transition focus:border-slate-500 focus:bg-white"
+                    min={1}
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({
+                        ...current,
+                        capacity: event.target.value,
+                      }))
+                    }
+                    type="number"
+                    value={workspaceForm.capacity}
+                  />
+                  <p className="text-xs text-slate-500">
+                    For a single desk use <code>1</code>; for meeting rooms use the room capacity.
+                  </p>
+                </label>
+
+                <label className="space-y-2 text-sm text-slate-700 lg:col-span-2">
+                  <span className="font-medium">Features JSON</span>
+                  <textarea
+                    className="min-h-32 w-full rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 font-mono text-sm outline-none transition focus:border-slate-500 focus:bg-white"
+                    onChange={(event) =>
+                      setWorkspaceForm((current) => ({
+                        ...current,
+                        features: event.target.value,
+                      }))
+                    }
+                    placeholder={`{\n  "monitor": true\n}`}
+                    value={workspaceForm.features}
+                  />
+                  <p className="text-xs text-slate-500">
+                    Optional JSON metadata such as equipment, room category, or extra labels.
+                  </p>
+                </label>
 
                 <div className="lg:col-span-2">
                   <button

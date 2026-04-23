@@ -352,6 +352,74 @@ describe('BookingsService', () => {
     expect(activeBookingsBuilder.gt).toHaveBeenCalled();
   });
 
+  it('allows creating a booking for an available meeting room workspace', async () => {
+    const startTime = isoMinutesFromNow(180);
+    const endTime = isoMinutesFromNow(240);
+    const workspaceBuilder = createQueryBuilder({
+      data: {
+        id: 'workspace-room-1',
+        name: 'Meeting Room M-01',
+        status: 'available',
+        type: 'meeting_room',
+      },
+      error: null,
+    });
+    const [noShowCandidatesBuilder, completedCandidatesBuilder] =
+      createEmptyLifecycleBuilders();
+    const activeBookingsBuilder = createQueryBuilder({
+      data: [],
+      error: null,
+    });
+    const createBuilder = createQueryBuilder({
+      data: {
+        id: 'booking-room-1',
+        user_id: 'user-1',
+        workspace_id: 'workspace-room-1',
+        start_time: startTime,
+        end_time: endTime,
+        status: 'confirmed',
+        checked_in_at: null,
+        cancelled_at: null,
+        cancel_reason: null,
+        created_at: new Date().toISOString(),
+      },
+      error: null,
+    });
+    const fromMock = jest
+      .fn()
+      .mockReturnValueOnce(workspaceBuilder)
+      .mockReturnValueOnce(noShowCandidatesBuilder)
+      .mockReturnValueOnce(completedCandidatesBuilder)
+      .mockReturnValueOnce(activeBookingsBuilder)
+      .mockReturnValueOnce(createBuilder);
+
+    mockedGetSupabaseAdmin.mockReturnValue({
+      from: fromMock,
+    } as never);
+
+    const user: AuthenticatedUser = {
+      id: 'user-1',
+      email: 'employee@demo.com',
+      role: 'employee',
+      fullName: 'Employee One',
+    };
+
+    const result = await service.create(user, {
+      workspaceId: 'workspace-room-1',
+      startTime,
+      endTime,
+    });
+
+    expect(result.status).toBe('confirmed');
+    expect(createBuilder.insert).toHaveBeenCalledWith({
+      user_id: 'user-1',
+      workspace_id: 'workspace-room-1',
+      start_time: startTime,
+      end_time: endTime,
+      status: 'confirmed',
+    });
+  });
+
   it('blocks an employee from cancelling another user booking', async () => {
     const bookingBuilder = createQueryBuilder({
       data: {
@@ -496,6 +564,78 @@ describe('BookingsService', () => {
       role: 'employee',
       fullName: 'Employee One',
     };
+
+    await expect(service.release('booking-1', user)).rejects.toThrow(
+      BadRequestException,
+    );
+  });
+
+  it('rejects releasing the same booking twice', async () => {
+    const checkedInBookingBuilder = createQueryBuilder({
+      data: {
+        id: 'booking-1',
+        user_id: 'user-1',
+        workspace_id: 'workspace-1',
+        start_time: '2026-04-22T09:00:00.000Z',
+        end_time: '2026-04-22T11:00:00.000Z',
+        status: 'checked_in',
+        checked_in_at: '2026-04-22T09:05:00.000Z',
+        cancelled_at: null,
+        cancel_reason: null,
+        created_at: '2026-04-22T08:00:00.000Z',
+      },
+      error: null,
+    });
+    const completedBookingBuilder = createQueryBuilder({
+      data: {
+        id: 'booking-1',
+        user_id: 'user-1',
+        workspace_id: 'workspace-1',
+        start_time: '2026-04-22T09:00:00.000Z',
+        end_time: '2026-04-22T11:00:00.000Z',
+        status: 'completed',
+        checked_in_at: '2026-04-22T09:05:00.000Z',
+        cancelled_at: null,
+        cancel_reason: null,
+        created_at: '2026-04-22T08:00:00.000Z',
+      },
+      error: null,
+    });
+    const releaseBuilder = createQueryBuilder({
+      data: {
+        id: 'booking-1',
+        user_id: 'user-1',
+        workspace_id: 'workspace-1',
+        start_time: '2026-04-22T09:00:00.000Z',
+        end_time: '2026-04-22T11:00:00.000Z',
+        status: 'completed',
+        checked_in_at: '2026-04-22T09:05:00.000Z',
+        cancelled_at: null,
+        cancel_reason: null,
+        created_at: '2026-04-22T08:00:00.000Z',
+      },
+      error: null,
+    });
+    const fromMock = jest
+      .fn()
+      .mockReturnValueOnce(checkedInBookingBuilder)
+      .mockReturnValueOnce(releaseBuilder)
+      .mockReturnValueOnce(completedBookingBuilder);
+
+    mockedGetSupabaseAdmin.mockReturnValue({
+      from: fromMock,
+    } as never);
+
+    const user: AuthenticatedUser = {
+      id: 'user-1',
+      email: 'employee@demo.com',
+      role: 'employee',
+      fullName: 'Employee One',
+    };
+
+    const firstRelease = await service.release('booking-1', user);
+
+    expect(firstRelease.status).toBe('completed');
 
     await expect(service.release('booking-1', user)).rejects.toThrow(
       BadRequestException,

@@ -41,9 +41,15 @@ export function requireE2ECredentials() {
 }
 
 function resolveBookingFlowCredentials(): E2ECredentials {
+  const employeeCredentials = resolveRoleCredentials("employee");
+
   return {
-    email: process.env.E2E_BOOKING_EMAIL ?? "",
-    password: process.env.E2E_BOOKING_PASSWORD ?? process.env.E2E_PASSWORD ?? "",
+    email: process.env.E2E_BOOKING_EMAIL ?? employeeCredentials.email,
+    password:
+      process.env.E2E_BOOKING_PASSWORD ??
+      employeeCredentials.password ??
+      process.env.E2E_PASSWORD ??
+      "",
   };
 }
 

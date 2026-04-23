@@ -145,6 +145,14 @@ export default function BookingsPage() {
   const canRunLifecycle =
     profile?.role === "admin" || profile?.role === "manager";
   const canManageSystemBookings = canRunLifecycle;
+  const activeQuotaBookings = useMemo(
+    () =>
+      bookings.filter(
+        (booking) =>
+          booking.status === "confirmed" || booking.status === "checked_in",
+      ),
+    [bookings],
+  );
 
   const bookingStats = useMemo(() => {
     return bookings.reduce(
@@ -663,6 +671,20 @@ export default function BookingsPage() {
     };
   }
 
+  function resetMyBookingFilters() {
+    setStatusFilter("all");
+    setSearchText("");
+  }
+
+  function resetManagedFilters() {
+    setManagedStatusFilter("all");
+    setManagedSearchText("");
+    setManagedUserFilter("all");
+    setManagedWorkspaceFilter("all");
+    setManagedStartDate("");
+    setManagedEndDate("");
+  }
+
   return (
     <main className="min-h-screen px-6 py-12" data-testid="bookings-page">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
@@ -805,6 +827,14 @@ export default function BookingsPage() {
                 >
                   {refreshing ? "Refreshing..." : "Refresh"}
                 </button>
+
+                <button
+                  className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
+                  onClick={resetMyBookingFilters}
+                  type="button"
+                >
+                  Reset filters
+                </button>
               </div>
             </div>
 
@@ -829,6 +859,46 @@ export default function BookingsPage() {
                 {errorMessage}
               </p>
             ) : null}
+
+            <div className="mt-6 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Active booking quota
+              </p>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Only bookings with status <code>confirmed</code> or <code>checked_in</code>{" "}
+                still count against the active booking limit. Historical rows such as{" "}
+                <code>completed</code>, <code>cancelled</code>, and <code>no_show</code> stay
+                visible here but no longer block new reservations.
+              </p>
+              <div className="mt-4 flex flex-wrap items-center gap-3">
+                <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700">
+                  Active bookings currently holding quota:{" "}
+                  <span className="font-semibold text-slate-900">
+                    {activeQuotaBookings.length}
+                  </span>
+                </div>
+                {activeQuotaBookings.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {activeQuotaBookings.slice(0, 4).map((booking) => {
+                      const { workspace } = getWorkspaceDetails(booking.workspace_id);
+
+                      return (
+                        <span
+                          className="rounded-full bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+                          key={booking.id}
+                        >
+                          {workspace?.name ?? booking.workspace_id} · {booking.status}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <span className="rounded-full bg-emerald-50 px-3 py-2 text-xs font-semibold text-emerald-700">
+                    No active quota is being held right now.
+                  </span>
+                )}
+              </div>
+            </div>
 
             <div className="mt-6 space-y-4" data-testid="bookings-my-list">
               {filteredBookings.length === 0 ? (
@@ -1140,6 +1210,20 @@ export default function BookingsPage() {
                 placeholder="Search email, workspace, QR, SVG..."
                 value={managedSearchText}
               />
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm leading-6 text-slate-600">
+                Use this panel to inspect cross-user booking state. Reset filters before demos
+                if an old user/workspace/date combination is hiding recent rows.
+              </p>
+              <button
+                className="rounded-full border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-white"
+                onClick={resetManagedFilters}
+                type="button"
+              >
+                Reset management filters
+              </button>
             </div>
 
             <div className="mt-6 space-y-4">
