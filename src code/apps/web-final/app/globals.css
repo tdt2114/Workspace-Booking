@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-background: #0B0E14;
+  --color-foreground: #F8FAFC;
+  
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-900: #1e3a8a;
+
+  --color-surface: #151A23;
+  --color-surface-hover: #1E2532;
+  
+  --color-border: #2A3241;
+  
+  --font-sans: var(--font-outfit), var(--font-inter), sans-serif;
+
+  /* Workspace Status Colors */
+  --color-status-available: #10B981; /* Emerald 500 */
+  --color-status-reserved: #EF4444; /* Red 500 */
+  --color-status-maintenance: #6B7280; /* Gray 500 */
+  --color-status-selected: #F59E0B; /* Amber 500 */
+}
+
+/* Glassmorphism Utilities */
+@utility glass {
+  background: rgba(21, 26, 35, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+@utility glass-panel {
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.6) 100%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+}
+
+@utility text-gradient {
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-image: linear-gradient(to right, #60A5FA, #A78BFA);
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+  font-family: var(--font-sans);
+  /* Premium Mesh Background */
+  background-image: 
+    radial-gradient(circle at 15% 50%, rgba(37, 99, 235, 0.1), transparent 25%),
+    radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1), transparent 25%);
+  background-attachment: fixed;
+}

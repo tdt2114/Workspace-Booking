@@ -8,8 +8,10 @@
   ],
   "scripts": {
     "dev:web": "npm run dev --workspace web",
+    "dev:final": "npm run dev --workspace web-final -- --port 3002",
     "dev:api": "npm run start:dev --workspace api",
     "build:web": "npm run build --workspace web",
+    "build:final": "npm run build --workspace web-final",
     "build:api": "npm run build --workspace api",
     "lint:web": "npm run lint --workspace web",
     "lint:api": "npm run lint --workspace api",

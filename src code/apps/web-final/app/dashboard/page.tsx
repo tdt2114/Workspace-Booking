@@ -1,0 +1,237 @@
+"use client"
+
+import * as React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Calendar, CheckCircle, Clock, XCircle, ArrowRight, User, Scan, MapPin, AlertCircle, Loader2, Sparkles, Building2, Stars, Search } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { supabase } from "@/lib/supabase/client"
+import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
+import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
+import { Button } from "@/components/premium/ui/button"
+import { Input } from "@/components/premium/ui/input"
+import { cn } from "@/lib/utils"
+
+interface Booking {
+  id: string
+  workspace_name: string
+  floor_name: string
+  start_time: string
+  end_time: string
+  status: 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'no_show'
+}
+
+export default function DashboardPage() {
+  const router = useRouter()
+  const [session, setSession] = React.useState<any>(null)
+  const [loading, setLoading] = React.useState(true)
+  const [profile, setProfile] = React.useState<any>(null)
+  const [bookings, setBookings] = React.useState<Booking[]>([])
+
+  const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
+
+  React.useEffect(() => {
+    const bootstrap = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      if (currentSession) {
+        setSession(currentSession)
+        try {
+          const [meRes, bookingsRes] = await Promise.all([
+            fetch(`${apiBaseUrl}/me`, { headers: { Authorization: `Bearer ${currentSession.access_token}` } }),
+            fetch(`${apiBaseUrl}/bookings/my`, { headers: { Authorization: `Bearer ${currentSession.access_token}` } })
+          ])
+          if (meRes.ok) setProfile(await meRes.json())
+          if (bookingsRes.ok) {
+            const data = await bookingsRes.json()
+            setBookings(data.items || [])
+          }
+        } catch (err) {
+          console.error("Dashboard fetch error:", err)
+        }
+      } else {
+        router.push("/login")
+      }
+      setLoading(false)
+    }
+    bootstrap()
+  }, [apiBaseUrl, router])
+
+  const checkInTarget = React.useMemo(() => {
+    const now = new Date()
+    return bookings.find(b => {
+      if (b.status !== 'confirmed') return false
+      const start = new Date(b.start_time)
+      const diffMs = start.getTime() - now.getTime()
+      const diffMins = diffMs / (1000 * 60)
+      return diffMins <= 30 && now < new Date(b.end_time)
+    })
+  }, [bookings])
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#07090D] flex items-center justify-center">
+        <Loader2 className="w-12 h-12 text-primary-500 animate-spin opacity-20" />
+      </div>
+    )
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-6xl mx-auto space-y-16 pb-24">
+        {/* --- HERO SECTION --- */}
+        <section className="relative pt-10 pb-4 text-center space-y-8">
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="space-y-4"
+          >
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 text-xs font-black uppercase tracking-[0.2em]">
+              <Stars size={14} />
+              Welcome to the Hub
+            </div>
+            <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-[0.9]">
+              Find your ideal <br/>
+              <span className="text-gradient">Work Experience.</span>
+            </h1>
+            <p className="text-lg text-slate-400 max-w-xl mx-auto font-medium">
+              Book premium desks, meeting rooms and creative spaces with one touch. Seamlessly integrated for your productivity.
+            </p>
+          </motion.div>
+
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2 }}
+            className="max-w-2xl mx-auto relative group"
+          >
+            <div className="absolute -inset-1 bg-gradient-to-r from-primary-500 to-blue-600 rounded-3xl blur opacity-20 group-hover:opacity-40 transition duration-1000" />
+            <div className="relative flex p-2 glass rounded-3xl border border-white/10 shadow-2xl">
+               <div className="flex-1 flex items-center px-6">
+                 <Search className="text-slate-500" size={20} />
+                 <Input 
+                   placeholder="Search buildings, floors or desks..." 
+                   className="bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-600 h-12"
+                 />
+               </div>
+               <Button className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 font-black shadow-lg shadow-primary-500/20">
+                 Explore Now
+               </Button>
+            </div>
+          </motion.div>
+        </section>
+
+        {/* --- SMART BANNER --- */}
+        <AnimatePresence>
+          {checkInTarget && (
+            <motion.div 
+              initial={{ opacity: 0, y: 40 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="glass-panel border-primary-500/30 bg-primary-500/10 p-8 flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary-500/10 rounded-full blur-[80px] -mr-32 -mt-32" />
+              <div className="flex items-center gap-8 relative z-10">
+                <div className="w-20 h-20 rounded-3xl bg-primary-500 flex items-center justify-center text-white shadow-2xl shadow-primary-500/50">
+                  <Scan size={40} className="animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-2xl font-black text-white">Your session is ready.</h3>
+                  <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">
+                    {checkInTarget.workspace_name} • Starts at {new Date(checkInTarget.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </p>
+                </div>
+              </div>
+              <Button 
+                onClick={() => router.push("/check-in")}
+                className="w-full md:w-auto h-16 px-12 bg-white text-slate-950 hover:bg-slate-100 font-black rounded-2xl text-lg shadow-2xl transition-transform active:scale-95"
+              >
+                CHECK-IN NOW
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* --- MAIN CONTENT: MARKETPLACE STYLE --- */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+           <CategoryCard 
+             title="Dedicated Desks" 
+             desc="Your own private spot for the day." 
+             count="12 available" 
+             icon={<MapPin size={24} />} 
+             color="bg-blue-500"
+             onClick={() => router.push("/floor-map")}
+           />
+           <CategoryCard 
+             title="Meeting Rooms" 
+             desc="Equipped with top-tier tech." 
+             count="4 available" 
+             icon={<Building2 size={24} />} 
+             color="bg-primary-500"
+             onClick={() => router.push("/floor-map")}
+           />
+           <CategoryCard 
+             title="Creative Zones" 
+             desc="Open spaces for collaboration." 
+             count="Ready now" 
+             icon={<Stars size={24} />} 
+             color="bg-emerald-500"
+             onClick={() => router.push("/floor-map")}
+           />
+        </div>
+
+        {/* --- RECENT BOOKINGS --- */}
+        <section className="space-y-8">
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-black text-white">My Reservations</h2>
+            <Button variant="ghost" className="text-primary-500 hover:text-primary-400 font-bold" onClick={() => router.push("/bookings")}>
+              View All History
+            </Button>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {bookings.filter(b => b.status === 'confirmed').length > 0 ? (
+              bookings.filter(b => b.status === 'confirmed').slice(0, 2).map((b) => (
+                <div key={b.id} className="p-6 glass rounded-[2.5rem] border-white/5 hover:border-primary-500/30 transition-all group flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 rounded-2xl bg-white/5 flex items-center justify-center text-slate-500 group-hover:text-primary-500 transition-colors">
+                      <Calendar size={32} />
+                    </div>
+                    <div>
+                      <h4 className="text-xl font-bold text-white">{b.workspace_name}</h4>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">{b.floor_name} • {new Date(b.start_time).toLocaleDateString()}</p>
+                    </div>
+                  </div>
+                  <ArrowRight size={24} className="text-slate-800 group-hover:text-primary-500 transition-transform group-hover:translate-x-2" />
+                </div>
+              ))
+            ) : (
+              <div className="md:col-span-2 py-20 glass rounded-[2.5rem] border-dashed border-2 border-white/5 text-center opacity-30">
+                <p className="text-lg font-bold">No upcoming bookings. Discover a new spot above!</p>
+              </div>
+            )}
+          </div>
+        </section>
+      </div>
+    </DashboardLayout>
+  )
+}
+
+function CategoryCard({ title, desc, count, icon, color, onClick }: any) {
+  return (
+    <button 
+      onClick={onClick}
+      className="group p-8 glass rounded-[3rem] border-white/5 hover:border-white/20 text-left transition-all hover:scale-[1.02] active:scale-[0.98]"
+    >
+      <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 shadow-xl", color)}>
+        {icon}
+      </div>
+      <h3 className="text-2xl font-black text-white mb-2">{title}</h3>
+      <p className="text-sm text-slate-500 font-medium mb-6 leading-relaxed">{desc}</p>
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-primary-400">{count}</span>
+        <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center text-white group-hover:bg-primary-500 transition-colors">
+          <ArrowRight size={20} />
+        </div>
+      </div>
+    </button>
+  )
+}

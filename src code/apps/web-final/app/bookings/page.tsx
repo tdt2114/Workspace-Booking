@@ -1,0 +1,344 @@
+"use client"
+
+import * as React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Calendar, Clock, MapPin, Search, Filter, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, AlertCircle, User, Loader2, Info, ChevronRight } from "lucide-react"
+import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
+import { Button } from "@/components/premium/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
+import { Input } from "@/components/premium/ui/input"
+import { supabase } from "@/lib/supabase/client"
+import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
+import { cn } from "@/lib/utils"
+
+interface Booking {
+  id: string
+  user_id: string
+  workspace_id: string
+  start_time: string
+  end_time: string
+  status: 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'no_show'
+  workspace_name?: string
+  floor_name?: string
+  user_email?: string
+}
+
+export default function BookingsPage() {
+  const [session, setSession] = React.useState<any>(null)
+  const [activeTab, setActiveTab] = React.useState<"my" | "system">("my")
+  const [bookings, setBookings] = React.useState<Booking[]>([])
+  const [systemBookings, setSystemBookings] = React.useState<Booking[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [actionLoading, setActionLoading] = React.useState<string | null>(null)
+  const [search, setSearch] = React.useState("")
+  const [isAdmin, setIsAdmin] = React.useState(false)
+
+  const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
+
+  const loadData = React.useCallback(async (token: string, tab: "my" | "system") => {
+    setLoading(true)
+    try {
+      const endpoint = tab === "my" ? "/bookings/my" : "/bookings/manage"
+      const res = await fetch(`${apiBaseUrl}${endpoint}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (tab === "my") setBookings(data.items || [])
+        else setSystemBookings(data.items || [])
+      }
+    } catch (err) {
+      console.error("Failed to load bookings:", err)
+    } finally {
+      setLoading(false)
+    }
+  }, [apiBaseUrl])
+
+  React.useEffect(() => {
+    const bootstrap = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      if (currentSession) {
+        setSession(currentSession)
+        // Simple check for admin role from me endpoint
+        const meRes = await fetch(`${apiBaseUrl}/me`, {
+          headers: { Authorization: `Bearer ${currentSession.access_token}` }
+        })
+        const meData = await meRes.json()
+        setIsAdmin(meData.role === 'admin' || meData.role === 'manager')
+        loadData(currentSession.access_token, activeTab)
+      }
+    }
+    bootstrap()
+  }, [apiBaseUrl, activeTab, loadData])
+
+  const handleAction = async (bookingId: string, action: 'cancel' | 'no-show' | 'complete') => {
+    if (!session) return
+    setActionLoading(bookingId)
+    try {
+      let endpoint = `${apiBaseUrl}/bookings/${bookingId}/cancel`
+      let method = "PATCH"
+      
+      if (action === 'no-show') endpoint = `${apiBaseUrl}/bookings/maintenance/no-show`
+      if (action === 'complete') endpoint = `${apiBaseUrl}/bookings/maintenance/complete`
+      
+      const res = await fetch(endpoint, {
+        method: method,
+        headers: { 
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}` 
+        }
+      })
+      
+      if (res.ok) {
+        loadData(session.access_token, activeTab)
+      }
+    } catch (err) {
+      console.error("Action error:", err)
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  const displayedBookings = (activeTab === "my" ? bookings : systemBookings).filter(b => 
+    (b.workspace_name || "").toLowerCase().includes(search.toLowerCase()) ||
+    (b.user_email || "").toLowerCase().includes(search.toLowerCase())
+  )
+
+  const stats = React.useMemo(() => {
+    const list = activeTab === "my" ? bookings : systemBookings
+    return {
+      total: list.length,
+      confirmed: list.filter(b => b.status === 'confirmed').length,
+      completed: list.filter(b => b.status === 'completed').length,
+      cancelled: list.filter(b => b.status === 'cancelled' || b.status === 'no_show').length,
+    }
+  }, [activeTab, bookings, systemBookings])
+
+  return (
+    <DashboardLayout>
+      <div className="space-y-8">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+          <div>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Booking Operations</h1>
+            <p className="text-slate-400 font-medium">Lifecycle management for all workspace reservations.</p>
+          </div>
+          <div className="flex items-center gap-2 glass p-1.5 rounded-2xl border-white/5">
+            <button 
+              onClick={() => setActiveTab("my")}
+              className={cn(
+                "px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                activeTab === "my" ? "bg-primary-600 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"
+              )}
+            >
+              <History size={18} />
+              My History
+            </button>
+            {isAdmin && (
+              <button 
+                onClick={() => setActiveTab("system")}
+                className={cn(
+                  "px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                  activeTab === "system" ? "bg-primary-600 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"
+                )}
+              >
+                <ShieldCheck size={18} />
+                Global Access
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <StatCard label="Total Vol" value={stats.total} icon={<Calendar className="text-blue-500" size={20} />} />
+          <StatCard label="Live/Conf" value={stats.confirmed} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
+          <StatCard label="Finalized" value={stats.completed} icon={<History className="text-slate-400" size={20} />} />
+          <StatCard label="Terminated" value={stats.cancelled} icon={<XCircle className="text-rose-500" size={20} />} />
+        </div>
+
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+          >
+            <Card className="lg:col-span-2 glass-panel border-white/10 flex flex-col h-fit">
+              <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <CardTitle>{activeTab === "my" ? "Your Reservations" : "System Records"}</CardTitle>
+                  <CardDescription>Filtering through {displayedBookings.length} records.</CardDescription>
+                </div>
+                <div className="relative group">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={16} />
+                  <Input 
+                    placeholder="Filter by name or email..." 
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="pl-9 h-10 w-full sm:w-64 bg-white/5 border-white/10 rounded-xl focus:border-primary-500" 
+                  />
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4 pb-8">
+                {loading ? (
+                  <div className="flex justify-center py-20">
+                    <Loader2 className="w-10 h-10 text-primary-500 animate-spin opacity-20" />
+                  </div>
+                ) : displayedBookings.length > 0 ? (
+                  displayedBookings.map((b) => (
+                    <BookingItem 
+                      key={b.id}
+                      booking={b}
+                      onCancel={() => handleAction(b.id, 'cancel')}
+                      isActionLoading={actionLoading === b.id}
+                    />
+                  ))
+                ) : (
+                  <div className="py-20 text-center space-y-4 opacity-20">
+                    <Calendar size={64} className="mx-auto" />
+                    <p className="font-bold">No records found matching your criteria.</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <aside className="space-y-6">
+              {activeTab === "system" && isAdmin && (
+                <Card className="glass-panel border-primary-500/20 bg-primary-500/5 overflow-hidden">
+                  <CardHeader className="bg-primary-500/10">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      <Settings2 size={20} className="text-primary-500" />
+                      Maintenance Tools
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="p-6 space-y-6">
+                    <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No-Show Cleanup</span>
+                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed font-medium">Terminate all reservations that missed the check-in window.</p>
+                      <Button 
+                        onClick={() => handleAction('bulk', 'no-show')}
+                        className="w-full bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/20 font-bold h-10 rounded-xl"
+                      >
+                        <Play size={14} className="mr-2" />
+                        Execute Cleanup
+                      </Button>
+                    </div>
+
+                    <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Archive Job</span>
+                      </div>
+                      <p className="text-xs text-slate-400 leading-relaxed font-medium">Automatically complete all past-due sessions to free resources.</p>
+                      <Button 
+                        onClick={() => handleAction('bulk', 'complete')}
+                        className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 font-bold h-10 rounded-xl"
+                      >
+                        <Play size={14} className="mr-2" />
+                        Archive Past Sessions
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card className="glass-panel border-white/5">
+                <CardHeader>
+                  <CardTitle className="text-lg">Quota Status</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex justify-between text-xs font-bold mb-1">
+                    <span className="text-slate-500">Active Bookings</span>
+                    <span className="text-white">{stats.confirmed}/5</span>
+                  </div>
+                  <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(stats.confirmed / 5) * 100}%` }} />
+                  </div>
+                  <div className="flex gap-3 pt-4 border-t border-white/5">
+                    <Info size={16} className="text-slate-500 shrink-0" />
+                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium uppercase tracking-tight">You are allowed up to 5 concurrent active confirmed reservations.</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </aside>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+    </DashboardLayout>
+  )
+}
+
+function StatCard({ label, value, icon }: any) {
+  return (
+    <Card className="glass-panel border-white/5 hover:border-white/10 transition-all hover:scale-105 duration-300">
+      <CardContent className="p-6">
+        <div className="flex items-center justify-between mb-4">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{label}</p>
+          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 shadow-inner">
+            {icon}
+          </div>
+        </div>
+        <p className="text-3xl font-black text-white">{value}</p>
+      </CardContent>
+    </Card>
+  )
+}
+
+function BookingItem({ booking, onCancel, isActionLoading }: any) {
+  const statusConfig: any = {
+    confirmed: { label: "Confirmed", class: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+    checked_in: { label: "Checked In", class: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+    completed: { label: "Completed", class: "bg-slate-500/10 text-slate-400 border-white/5" },
+    cancelled: { label: "Cancelled", class: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+    no_show: { label: "No Show", class: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+  }
+
+  const cfg = statusConfig[booking.status] || statusConfig.confirmed
+
+  return (
+    <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl border border-white/5 bg-white/5 hover:border-primary-500/30 transition-all gap-4">
+      <div className="flex items-center gap-5">
+        <div className={cn(
+          "w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all group-hover:scale-110",
+          cfg.class
+        )}>
+          <Calendar size={28} />
+        </div>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <h4 className="text-lg font-bold text-white">{booking.workspace_name || "Workspace"}</h4>
+            {booking.user_email && <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg font-bold">{booking.user_email}</span>}
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
+            <span className="flex items-center gap-1.5"><MapPin size={14} className="text-primary-500" /> {booking.floor_name || "Level"}</span>
+            <span className="flex items-center gap-1.5"><Clock size={14} className="text-primary-500" /> {new Date(booking.start_time).toLocaleDateString()} {new Date(booking.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between sm:justify-end gap-4">
+        <span className={cn("px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border", cfg.class)}>
+          {cfg.label}
+        </span>
+        <div className="flex items-center gap-2">
+          {booking.status === 'confirmed' && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={onCancel}
+              disabled={isActionLoading}
+              className="text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 h-10 font-bold"
+            >
+              {isActionLoading ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={18} className="mr-2" />}
+              Cancel
+            </Button>
+          )}
+          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-white h-10 w-10">
+            <ChevronRight size={20} />
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
