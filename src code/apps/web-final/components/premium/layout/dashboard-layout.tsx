@@ -4,7 +4,7 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
-import { LayoutDashboard, Map, CalendarRange, QrCode, Settings, LogOut, ShieldCheck, User, Bell, Search, Menu, X } from "lucide-react"
+import { LayoutDashboard, Map, CalendarRange, QrCode, Settings, LogOut, ShieldCheck, Bell, Search, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/premium/ui/button"
 import { supabase } from "@/lib/supabase/client"
@@ -12,6 +12,10 @@ import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 
 interface DashboardLayoutProps {
   children: React.ReactNode
+}
+
+interface MeResponse {
+  role?: string
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
@@ -34,8 +38,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             headers: { Authorization: `Bearer ${session.access_token}` }
           })
           if (res.ok) {
-            const data = await res.json()
-            setRole(data.role)
+            const data = await res.json() as MeResponse
+            setRole(data.role ?? null)
           }
         } catch (err) {
           console.error("Auth check error:", err)

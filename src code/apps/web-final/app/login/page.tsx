@@ -8,11 +8,18 @@ import { supabase } from "@/lib/supabase/client"
 import { getSafeRedirectTo } from "@/lib/auth-redirect"
 import { Button } from "@/components/premium/ui/button"
 import { Input } from "@/components/premium/ui/input"
-import { cn } from "@/lib/utils"
 
 type AuthMode = "sign-in" | "sign-up"
 
 export default function LoginPage() {
+  return (
+    <React.Suspense fallback={null}>
+      <LoginPageContent />
+    </React.Suspense>
+  )
+}
+
+function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = getSafeRedirectTo(searchParams.get("redirectTo"))
@@ -77,7 +84,7 @@ export default function LoginPage() {
           setIsSubmitting(false)
         }
       }
-    } catch (err) {
+    } catch {
       setError("An unexpected error occurred.")
       setIsSubmitting(false)
     }
@@ -176,6 +183,7 @@ export default function LoginPage() {
                   <Input 
                     type="email" 
                     placeholder="admin@demo.com" 
+                    data-testid="login-email"
                     className="pl-12 bg-white/5 border-white/10 h-14 rounded-2xl focus:border-primary-500 transition-all text-white"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -192,6 +200,7 @@ export default function LoginPage() {
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={20} />
                   <Input 
                     type="password" 
+                    data-testid="login-password"
                     placeholder="••••••••" 
                     className="pl-12 bg-white/5 border-white/10 h-14 rounded-2xl focus:border-primary-500 transition-all text-white"
                     value={password}
@@ -228,6 +237,7 @@ export default function LoginPage() {
 
               <Button 
                 type="submit" 
+                data-testid="login-submit"
                 className="w-full h-14 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white font-bold text-lg shadow-lg shadow-primary-500/20 transition-all active:scale-[0.98] group disabled:opacity-50"
                 disabled={isSubmitting}
               >
@@ -258,7 +268,7 @@ export default function LoginPage() {
                 {mode === "sign-in" ? (
                   <>
                     <UserPlus size={18} />
-                    Don't have an account? Register here
+                    Don&apos;t have an account? Register here
                   </>
                 ) : (
                   <>

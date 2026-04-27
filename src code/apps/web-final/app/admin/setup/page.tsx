@@ -2,8 +2,9 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, Search, CheckCircle2, AlertCircle, ChevronRight, FileCode, Info } from "lucide-react"
+import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info } from "lucide-react"
 import { useRouter } from "next/navigation"
+import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
@@ -42,11 +43,44 @@ interface Workspace {
   capacity: number
 }
 
+interface ListResponse<T> {
+  items?: T[]
+}
+
+interface TabButtonProps {
+  active: boolean
+  onClick: () => void
+  icon: React.ReactNode
+  label: string
+}
+
+interface BuildingManagerProps {
+  buildings: Building[]
+  onRefresh: () => Promise<void>
+  apiBaseUrl: string
+  token: string
+}
+
+interface FloorManagerProps {
+  floors: Floor[]
+  buildings: Building[]
+}
+
+interface WorkspaceManagerProps {
+  workspaces: Workspace[]
+}
+
+interface SvgMapperProps {
+  floors: Floor[]
+  apiBaseUrl: string
+  token: string
+}
+
 // --- Main Component ---
 export default function AdminSetupPage() {
   const router = useRouter()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
-  const [session, setSession] = React.useState<any>(null)
+  const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<Tab>("buildings")
   
   const [buildings, setBuildings] = React.useState<Building[]>([])
@@ -54,23 +88,11 @@ export default function AdminSetupPage() {
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
-  const [message, setMessage] = React.useState<string | null>(null)
+  const accessToken = session?.access_token ?? null
+  const tokenForUi: string = accessToken ?? ""
 
-  // Auth & Initial Data
-  React.useEffect(() => {
-    const bootstrap = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession()
-      if (!currentSession) {
-        router.push("/login")
-        return
-      }
-      setSession(currentSession)
-      await loadData(currentSession.access_token)
-    }
-    bootstrap()
-  }, [apiBaseUrl, router])
-
-  const loadData = async (token: string) => {
+  const loadData = React.useCallback(async (token: string) => {
+    if (!token) return
     setLoading(true)
     try {
       const headers = { Authorization: `Bearer ${token}` }
@@ -81,19 +103,33 @@ export default function AdminSetupPage() {
       ])
       
       if (bRes.ok && fRes.ok && wRes.ok) {
-        const b = await bRes.json()
-        const f = await fRes.json()
-        const w = await wRes.json()
+        const b = await bRes.json() as ListResponse<Building>
+        const f = await fRes.json() as ListResponse<Floor>
+        const w = await wRes.json() as ListResponse<Workspace>
         setBuildings(b.items || [])
         setFloors(f.items || [])
         setWorkspaces(w.items || [])
       }
-    } catch (err) {
+    } catch {
       setError("Failed to load system data.")
     } finally {
       setLoading(false)
     }
-  }
+  }, [apiBaseUrl])
+
+  // Auth & Initial Data
+  React.useEffect(() => {
+    const bootstrap = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      if (!currentSession) {
+        router.push("/login")
+        return
+      }
+      setSession(currentSession)
+      await loadData(currentSession.access_token ?? "")
+    }
+    void bootstrap()
+  }, [loadData, router])
 
   if (loading && !session) return null
 
@@ -120,13 +156,6 @@ export default function AdminSetupPage() {
           </motion.div>
         )}
 
-        {message && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm font-medium">
-            <CheckCircle2 size={18} />
-            {message}
-          </motion.div>
-        )}
-
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -135,10 +164,10 @@ export default function AdminSetupPage() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
           >
-            {activeTab === "buildings" && <BuildingManager buildings={buildings} onRefresh={() => loadData(session.access_token)} apiBaseUrl={apiBaseUrl} token={session?.access_token} />}
-            {activeTab === "floors" && <FloorManager floors={floors} buildings={buildings} onRefresh={() => loadData(session.access_token)} apiBaseUrl={apiBaseUrl} token={session?.access_token} />}
-            {activeTab === "workspaces" && <WorkspaceManager workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={() => loadData(session.access_token)} apiBaseUrl={apiBaseUrl} token={session?.access_token} />}
-            {activeTab === "svg-mapping" && <SvgMapper floors={floors} buildings={buildings} apiBaseUrl={apiBaseUrl} token={session?.access_token} />}
+            {activeTab === "buildings" ? (accessToken ? <BuildingManager buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
+            {activeTab === "floors" && <FloorManager floors={floors} buildings={buildings} />}
+            {activeTab === "workspaces" && <WorkspaceManager workspaces={workspaces} />}
+            {activeTab === "svg-mapping" ? (accessToken ? <SvgMapper floors={floors} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -146,7 +175,7 @@ export default function AdminSetupPage() {
   )
 }
 
-function TabButton({ active, onClick, icon, label }: any) {
+function TabButton({ active, onClick, icon, label }: TabButtonProps) {
   return (
     <button
       onClick={onClick}
@@ -163,11 +192,12 @@ function TabButton({ active, onClick, icon, label }: any) {
 
 // --- Specialized Managers ---
 
-function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: any) {
+function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingManagerProps) {
   const [isSaving, setIsSaving] = React.useState(false)
   const [form, setForm] = React.useState({ name: "", address: "", total_floors: 1 })
 
   const handleCreate = async () => {
+    if (!token) return
     setIsSaving(true)
     try {
       const res = await fetch(`${apiBaseUrl}/buildings`, {
@@ -176,7 +206,7 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: any) {
         body: JSON.stringify(form)
       })
       if (res.ok) {
-        onRefresh()
+        await onRefresh()
         setForm({ name: "", address: "", total_floors: 1 })
       }
     } finally { setIsSaving(false) }
@@ -241,7 +271,7 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: any) {
   )
 }
 
-function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: any) {
+function FloorManager({ floors, buildings }: FloorManagerProps) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <Card className="lg:col-span-2 glass-panel border-white/5">
@@ -258,7 +288,7 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: any) 
                 </div>
                 <div>
                   <h4 className="font-bold text-lg text-white">{f.name || `Floor ${f.floor_number}`}</h4>
-                  <p className="text-sm text-slate-500">{buildings.find((b: any) => b.id === f.building_id)?.name}</p>
+                  <p className="text-sm text-slate-500">{buildings.find((b) => b.id === f.building_id)?.name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
@@ -286,7 +316,7 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: any) 
   )
 }
 
-function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl, token }: any) {
+function WorkspaceManager({ workspaces }: WorkspaceManagerProps) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -321,13 +351,13 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
   )
 }
 
-function SvgMapper({ floors, buildings, apiBaseUrl, token }: any) {
+function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
   const [selectedFloorId, setSelectedFloorId] = React.useState("")
   const [file, setFile] = React.useState<File | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
 
   const handleUpload = async () => {
-    if (!selectedFloorId || !file) return
+    if (!selectedFloorId || !file || !token) return
     setIsUploading(true)
     try {
       const formData = new FormData()
@@ -371,7 +401,7 @@ function SvgMapper({ floors, buildings, apiBaseUrl, token }: any) {
                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Target Floor</label>
                <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none" onChange={e => setSelectedFloorId(e.target.value)} value={selectedFloorId}>
                   <option value="">Select Floor</option>
-                  {floors.map((f: any) => (
+                  {floors.map((f) => (
                     <option key={f.id} value={f.id} className="bg-slate-900 text-white">{f.name || `Floor ${f.floor_number}`}</option>
                   ))}
                </select>

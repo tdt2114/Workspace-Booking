@@ -1,12 +1,13 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import { motion, AnimatePresence } from "framer-motion"
-import { QrCode, Search, Download, Copy, ExternalLink, Printer, Info, CheckCircle2, AlertCircle, Building, Layers } from "lucide-react"
+import { QrCode, Search, Download, Copy, Printer, Info, CheckCircle2, Layers } from "lucide-react"
 import QRCode from "qrcode"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
@@ -26,8 +27,15 @@ interface Floor {
   floor_number: number
 }
 
+interface WorkspacesResponse {
+  items?: Workspace[]
+}
+
+interface FloorsResponse {
+  items?: Floor[]
+}
+
 export default function WorkspaceQrPage() {
-  const [session, setSession] = React.useState<any>(null)
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([])
   const [floors, setFloors] = React.useState<Floor[]>([])
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
@@ -43,18 +51,19 @@ export default function WorkspaceQrPage() {
     const bootstrap = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession()
       if (currentSession) {
-        setSession(currentSession)
         const headers = { Authorization: `Bearer ${currentSession.access_token}` }
         const [wRes, fRes] = await Promise.all([
           fetch(`${apiBaseUrl}/workspaces`, { headers }),
           fetch(`${apiBaseUrl}/floors`, { headers })
         ])
         if (wRes.ok && fRes.ok) {
-          const wData = await wRes.json()
-          const fData = await fRes.json()
-          setWorkspaces(wData.items || [])
-          setFloors(fData.items || [])
-          if (wData.items?.length > 0) setSelectedId(wData.items[0].id)
+          const wData = await wRes.json() as WorkspacesResponse
+          const fData = await fRes.json() as FloorsResponse
+          const workspaceItems = wData.items || []
+          const floorItems = fData.items || []
+          setWorkspaces(workspaceItems)
+          setFloors(floorItems)
+          if (workspaceItems.length > 0) setSelectedId(workspaceItems[0].id)
         }
       }
       setLoading(false)
@@ -66,13 +75,15 @@ export default function WorkspaceQrPage() {
 
   React.useEffect(() => {
     if (selectedWorkspace?.qr_code_value) {
-      QRCode.toDataURL(selectedWorkspace.qr_code_value, {
+      void QRCode.toDataURL(selectedWorkspace.qr_code_value, {
         width: 400,
         margin: 2,
         color: { dark: '#000000', light: '#ffffff' }
-      }).then(url => setQrImageUrl(url))
+      }).then((url: string) => setQrImageUrl(url))
     }
   }, [selectedWorkspace])
+
+  const activeQrImageUrl = selectedWorkspace ? qrImageUrl : null
 
   const filteredWorkspaces = workspaces.filter(w => {
     const matchesSearch = w.name.toLowerCase().includes(search.toLowerCase()) || w.qr_code_value.toLowerCase().includes(search.toLowerCase())
@@ -148,7 +159,10 @@ export default function WorkspaceQrPage() {
               {filteredWorkspaces.map((ws) => (
                 <button
                   key={ws.id}
-                  onClick={() => setSelectedId(ws.id)}
+                  onClick={() => {
+                    setQrImageUrl(null)
+                    setSelectedId(ws.id)
+                  }}
                   className={cn(
                     "p-5 rounded-2xl border text-left transition-all duration-300 group relative overflow-hidden",
                     selectedId === ws.id 
@@ -208,8 +222,8 @@ export default function WorkspaceQrPage() {
                           </div>
                           
                           <div className="w-44 h-44 bg-white flex items-center justify-center">
-                            {qrImageUrl ? (
-                              <img src={qrImageUrl} alt="QR Code" className="w-full h-full" />
+                            {activeQrImageUrl ? (
+                              <Image src={activeQrImageUrl} alt="QR Code" width={176} height={176} className="w-full h-full" unoptimized />
                             ) : (
                               <QrCode size={100} className="text-slate-200 animate-pulse" />
                             )}

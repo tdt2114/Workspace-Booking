@@ -2,15 +2,15 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Camera, QrCode, ArrowLeft, CheckCircle2, AlertCircle, Scan, History, Info, Send, Loader2, X } from "lucide-react"
+import { Camera, QrCode, ArrowLeft, CheckCircle2, AlertCircle, History, Info, Send, Loader2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { Html5QrcodeScanner } from "html5-qrcode"
+import type { Session } from "@supabase/supabase-js"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
-import { cn } from "@/lib/utils"
 
 interface Booking {
   id: string
@@ -20,12 +20,28 @@ interface Booking {
   status: string
 }
 
+interface BookingsResponse {
+  items?: Booking[]
+}
+
+interface CheckInResponse {
+  message?: string
+}
+
 export default function CheckInPage() {
   const router = useRouter()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   
-  const [session, setSession] = React.useState<any>(null)
+  const [session, setSession] = React.useState<Session | null>(null)
   const [qrValue, setQrValue] = React.useState("")
+  const [manualScannedAt, setManualScannedAt] = React.useState("")
+  const [enableTestScanTime] = React.useState(() => {
+    if (typeof window === "undefined") {
+      return false
+    }
+
+    return new URLSearchParams(window.location.search).get("e2e") === "1"
+  })
   const [status, setStatus] = React.useState<"idle" | "scanning" | "success" | "error">("idle")
   const [manual, setManual] = React.useState(false)
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
@@ -48,8 +64,8 @@ export default function CheckInPage() {
           headers: { Authorization: `Bearer ${currentSession.access_token}` }
         })
         if (res.ok) {
-          const data = await res.json()
-          const upcoming = data.items?.find((b: any) => b.status === 'confirmed' || b.status === 'checked_in')
+          const data = await res.json() as BookingsResponse
+          const upcoming = data.items?.find((b) => b.status === "confirmed" || b.status === "checked_in")
           setNextBooking(upcoming || null)
         }
       } catch (err) {
@@ -60,6 +76,39 @@ export default function CheckInPage() {
   }, [apiBaseUrl, router])
 
   // --- QR Scanner Setup ---
+  const handleCheckIn = React.useCallback(async (value: string) => {
+    if (!session || !value) return
+    setIsSubmitting(true)
+    setErrorMessage(null)
+
+    try {
+      const res = await fetch(`${apiBaseUrl}/check-in/scan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({
+          qrCodeValue: value,
+          scannedAt: enableTestScanTime && manualScannedAt ? new Date(manualScannedAt).toISOString() : undefined,
+        })
+      })
+
+      const data = await res.json() as CheckInResponse
+      if (res.ok) {
+        setStatus("success")
+      } else {
+        setStatus("error")
+        setErrorMessage(data.message || "Invalid QR code or session mismatch.")
+      }
+    } catch {
+      setStatus("error")
+      setErrorMessage("Network error. Please try again.")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, session])
+
   React.useEffect(() => {
     if (status === "scanning") {
       const scanner = new Html5QrcodeScanner(
@@ -70,53 +119,20 @@ export default function CheckInPage() {
 
       scanner.render(
         (decodedText) => {
-          scanner.clear()
-          handleCheckIn(decodedText)
+          void scanner.clear()
+          void handleCheckIn(decodedText)
         },
-        (error) => {
-          // Silent errors during scanning
-        }
+        () => {}
       )
 
       return () => {
         scanner.clear().catch(console.error)
       }
     }
-  }, [status])
-
-  const handleCheckIn = async (value: string) => {
-    if (!session || !value) return
-    setIsSubmitting(true)
-    setStatus("scanning") // Show scanning state even for manual
-    setErrorMessage(null)
-
-    try {
-      const res = await fetch(`${apiBaseUrl}/check-in`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`
-        },
-        body: JSON.stringify({ qrValue: value })
-      })
-
-      const data = await res.json()
-      if (res.ok) {
-        setStatus("success")
-      } else {
-        setStatus("error")
-        setErrorMessage(data.message || "Invalid QR code or session mismatch.")
-      }
-    } catch (err) {
-      setStatus("error")
-      setErrorMessage("Network error. Please try again.")
-    } finally {
-      setIsSubmitting(false)
-    }
-  }
+  }, [handleCheckIn, status])
 
   return (
-    <div className="min-h-screen bg-[#0B0E14] text-white flex flex-col font-inter overflow-hidden relative">
+    <div className="min-h-screen bg-[#0B0E14] text-white flex flex-col font-inter overflow-hidden relative" data-testid="check-in-page">
       {/* Background Orbs */}
       <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary-900/10 rounded-full blur-[120px]" />
       
@@ -170,7 +186,7 @@ export default function CheckInPage() {
               )}
 
               {status === "success" && (
-                <motion.div key="success" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center space-y-6 p-8">
+                <motion.div key="success" data-testid="check-in-success" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center space-y-6 p-8">
                   <div className="w-24 h-24 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto text-emerald-500 ring-4 ring-emerald-500/20">
                     <CheckCircle2 size={56} className="animate-bounce" />
                   </div>
@@ -185,7 +201,7 @@ export default function CheckInPage() {
               )}
 
               {status === "error" && (
-                <motion.div key="error" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center space-y-6 p-8">
+                <motion.div key="error" data-testid="check-in-error" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="text-center space-y-6 p-8">
                   <div className="w-24 h-24 rounded-full bg-rose-500/10 flex items-center justify-center mx-auto text-rose-500 ring-4 ring-rose-500/20">
                     <AlertCircle size={56} />
                   </div>
@@ -205,7 +221,7 @@ export default function CheckInPage() {
         {/* Manual Input */}
         <div className="space-y-4">
           <div className="flex items-center justify-center">
-            <button onClick={() => setManual(!manual)} className="text-sm font-bold text-slate-500 hover:text-white flex items-center gap-2 transition-all">
+            <button data-testid="check-in-toggle-manual" onClick={() => setManual(!manual)} className="text-sm font-bold text-slate-500 hover:text-white flex items-center gap-2 transition-all">
               <QrCode size={18} />
               {manual ? "Hide manual interface" : "Use manual entry code"}
             </button>
@@ -213,11 +229,23 @@ export default function CheckInPage() {
 
           <AnimatePresence>
             {manual && (
-              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-1 glass rounded-[1.5rem] border border-white/10 flex items-center gap-2">
-                <Input placeholder="Enter desk ID..." value={qrValue} onChange={(e) => setQrValue(e.target.value)} className="bg-transparent border-none focus:ring-0 h-12 pl-4 font-bold tracking-widest text-primary-500 placeholder:text-slate-600 placeholder:font-normal placeholder:tracking-normal" />
-                <Button onClick={() => handleCheckIn(qrValue)} disabled={isSubmitting || !qrValue} className="bg-primary-600 hover:bg-primary-700 h-10 w-12 rounded-xl shrink-0 p-0">
-                  {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
-                </Button>
+              <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+                <div className="p-1 glass rounded-[1.5rem] border border-white/10 flex items-center gap-2">
+                  <Input data-testid="check-in-qr-input" placeholder="Enter desk ID..." value={qrValue} onChange={(e) => setQrValue(e.target.value)} className="bg-transparent border-none focus:ring-0 h-12 pl-4 font-bold tracking-widest text-primary-500 placeholder:text-slate-600 placeholder:font-normal placeholder:tracking-normal" />
+                  <Button data-testid="check-in-submit-manual" onClick={() => handleCheckIn(qrValue)} disabled={isSubmitting || !qrValue} className="bg-primary-600 hover:bg-primary-700 h-10 w-12 rounded-xl shrink-0 p-0">
+                    {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
+                  </Button>
+                </div>
+
+                {enableTestScanTime && (
+                  <Input
+                    data-testid="check-in-scanned-at"
+                    type="datetime-local"
+                    value={manualScannedAt}
+                    onChange={(e) => setManualScannedAt(e.target.value)}
+                    className="bg-white/5 border-white/10 h-12 rounded-xl text-white [color-scheme:dark]"
+                  />
+                )}
               </motion.div>
             )}
           </AnimatePresence>

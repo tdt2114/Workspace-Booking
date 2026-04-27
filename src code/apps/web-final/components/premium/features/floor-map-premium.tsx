@@ -2,12 +2,12 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Search, ZoomIn, ZoomOut, Maximize2, Map as MapIcon, Info, ChevronRight, Calendar, Clock, AlertCircle, CheckCircle2, Building, Layers } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { ZoomIn, ZoomOut, Maximize2, Map as MapIcon, ChevronRight, Calendar, Clock, AlertCircle, CheckCircle2, Building, Layers } from "lucide-react"
+import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { Button } from "@/components/premium/ui/button"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/premium/ui/card"
+import { Card } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
 import { cn } from "@/lib/utils"
 
@@ -27,6 +27,7 @@ interface WorkspaceRecord {
   type: string
   status: 'available' | 'maintenance' | 'inactive'
   svg_element_id: string
+  qr_code_value?: string
 }
 
 interface BookingRecord {
@@ -39,6 +40,22 @@ interface BookingRecord {
 }
 
 type FloorMapStatus = WorkspaceRecord["status"] | "reserved"
+
+interface FloorsResponse {
+  items: FloorRecord[]
+}
+
+interface WorkspacesResponse {
+  items: WorkspaceRecord[]
+}
+
+interface FloorStateResponse {
+  items: BookingRecord[]
+}
+
+interface BookingResponse {
+  message?: string
+}
 
 const statusStyleMap: Record<FloorMapStatus, { fill: string; stroke: string; label: string; glow: string }> = {
   available: { fill: "rgba(16, 185, 129, 0.1)", stroke: "rgba(16, 185, 129, 0.5)", label: "Available", glow: "rgba(16, 185, 129, 0.2)" },
@@ -66,8 +83,7 @@ function buildDefaultTimeWindow() {
 }
 
 export function FloorMapPremium() {
-  const router = useRouter()
-  const [session, setSession] = React.useState<any>(null)
+  const [session, setSession] = React.useState<Session | null>(null)
   const [floors, setFloors] = React.useState<FloorRecord[]>([])
   const [workspaces, setWorkspaces] = React.useState<WorkspaceRecord[]>([])
   const [floorBookings, setFloorBookings] = React.useState<BookingRecord[]>([])
@@ -87,7 +103,6 @@ export function FloorMapPremium() {
   const [success, setSuccess] = React.useState<string | null>(null)
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
-  const svgContainerRef = React.useRef<HTMLDivElement | null>(null)
 
   const selectedFloor = React.useMemo(() => floors.find(f => f.id === selectedFloorId), [floors, selectedFloorId])
   const filteredWorkspaces = React.useMemo(() => workspaces.filter(w => w.floor_id === selectedFloorId), [workspaces, selectedFloorId])
@@ -108,8 +123,8 @@ export function FloorMapPremium() {
         ])
 
         if (floorsRes.ok && workspacesRes.ok) {
-          const floorsData = await floorsRes.json()
-          const workspacesData = await workspacesRes.json()
+          const floorsData = await floorsRes.json() as FloorsResponse
+          const workspacesData = await workspacesRes.json() as WorkspacesResponse
           setFloors(floorsData.items)
           setWorkspaces(workspacesData.items)
           if (floorsData.items.length > 0) setSelectedFloorId(floorsData.items[0].id)
@@ -138,7 +153,7 @@ export function FloorMapPremium() {
         headers: { Authorization: `Bearer ${session.access_token}` }
       })
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json() as FloorStateResponse
         setFloorBookings(data.items)
       }
     } catch (err) {
@@ -147,7 +162,11 @@ export function FloorMapPremium() {
   }, [apiBaseUrl, session, selectedFloorId, viewStart, viewEnd])
 
   React.useEffect(() => {
-    fetchFloorState()
+    const timeoutId = window.setTimeout(() => {
+      void fetchFloorState()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
   }, [fetchFloorState])
 
   // --- Load SVG ---
@@ -174,7 +193,7 @@ export function FloorMapPremium() {
     if (!session) return
     const channel = supabase.channel(`floor-map-${selectedFloorId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'bookings' }, () => {
-        fetchFloorState()
+        void fetchFloorState()
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
@@ -247,15 +266,15 @@ export function FloorMapPremium() {
         })
       })
 
-      const data = await res.json()
-      if (res.ok) {
-        setSuccess("Workspace reserved successfully!")
-        fetchFloorState()
-        setTimeout(() => setSelectedWorkspaceId(null), 2000)
-      } else {
-        setError(data.message || "Failed to create booking.")
-      }
-    } catch (err) {
+        const data = await res.json() as BookingResponse
+        if (res.ok) {
+          setSuccess("Workspace reserved successfully!")
+          void fetchFloorState()
+          setTimeout(() => setSelectedWorkspaceId(null), 2000)
+        } else {
+          setError(data.message || "Failed to create booking.")
+        }
+    } catch {
       setError("An unexpected error occurred.")
     } finally {
       setBookingLoading(false)
@@ -269,12 +288,13 @@ export function FloorMapPremium() {
   )
 
   return (
-    <div className="flex flex-col h-full space-y-6">
+    <div className="flex flex-col h-full space-y-6" data-testid="floor-map-shell">
       {/* Filters Bar */}
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2 glass px-4 py-2 rounded-2xl border-white/5">
           <Building size={18} className="text-slate-400" />
           <select 
+            data-testid="floor-map-floor-select"
             className="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
             onChange={(e) => setSelectedFloorId(e.target.value)}
             value={selectedFloorId}
@@ -291,6 +311,7 @@ export function FloorMapPremium() {
           <Clock size={18} className="text-slate-400" />
           <div className="flex items-center gap-2">
             <input 
+              data-testid="floor-map-view-start"
               type="datetime-local" 
               className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
               value={viewStart}
@@ -298,6 +319,7 @@ export function FloorMapPremium() {
             />
             <span className="text-slate-600">to</span>
             <input 
+              data-testid="floor-map-view-end"
               type="datetime-local" 
               className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
               value={viewEnd}
@@ -319,6 +341,7 @@ export function FloorMapPremium() {
         <Card className="flex-1 glass-panel border-white/5 relative overflow-hidden flex items-center justify-center p-8">
           {processedSvg ? (
             <div 
+              data-testid="floor-map-svg-container"
               className="w-full h-full flex items-center justify-center transition-all duration-500"
               dangerouslySetInnerHTML={{ __html: processedSvg }}
               onClick={handleSvgClick}
@@ -368,8 +391,13 @@ export function FloorMapPremium() {
                       <Layers size={48} className="text-primary-500 opacity-50" />
                     </div>
                     <div>
-                      <h4 className="text-2xl font-black text-white">{selectedWorkspace?.name}</h4>
+                      <h4 data-testid="floor-map-selected-workspace-name" className="text-2xl font-black text-white">{selectedWorkspace?.name}</h4>
                       <p className="text-slate-400 text-sm font-medium">{selectedFloor?.name || `Floor ${selectedFloor?.floor_number}`}</p>
+                      {selectedWorkspace?.qr_code_value ? (
+                        <p data-testid="floor-map-selected-workspace-qr" className="text-xs font-mono text-slate-500 mt-2">
+                          {selectedWorkspace.qr_code_value}
+                        </p>
+                      ) : null}
                     </div>
                   </div>
 
@@ -379,6 +407,7 @@ export function FloorMapPremium() {
                       <div className="relative group">
                         <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500" size={18} />
                         <Input 
+                          data-testid="floor-map-booking-start"
                           type="datetime-local" 
                           className="pl-12 bg-white/5 border-white/10 h-12 rounded-xl focus:border-primary-500 transition-all text-white [color-scheme:dark]"
                           value={bookingStart}
@@ -392,6 +421,7 @@ export function FloorMapPremium() {
                       <div className="relative group">
                         <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500" size={18} />
                         <Input 
+                          data-testid="floor-map-booking-end"
                           type="datetime-local" 
                           className="pl-12 bg-white/5 border-white/10 h-12 rounded-xl focus:border-primary-500 transition-all text-white [color-scheme:dark]"
                           value={bookingEnd}
@@ -402,13 +432,13 @@ export function FloorMapPremium() {
                   </div>
 
                   {error && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-sm flex gap-3">
+                    <motion.div data-testid="floor-map-booking-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-sm flex gap-3">
                       <AlertCircle size={18} className="shrink-0" />
                       <p>{error}</p>
                     </motion.div>
                   )}
                   {success && (
-                    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm flex gap-3">
+                    <motion.div data-testid="floor-map-booking-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm flex gap-3">
                       <CheckCircle2 size={18} className="shrink-0" />
                       <p>{success}</p>
                     </motion.div>
@@ -417,6 +447,7 @@ export function FloorMapPremium() {
 
                 <div className="p-6 border-t border-white/5 bg-white/5">
                   <Button 
+                    data-testid="floor-map-create-booking"
                     className="w-full bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
                     onClick={handleBooking}
                     disabled={bookingLoading}

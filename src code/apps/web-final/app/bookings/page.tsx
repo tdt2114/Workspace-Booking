@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, Clock, MapPin, Search, Filter, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, AlertCircle, User, Loader2, Info, ChevronRight } from "lucide-react"
+import { Calendar, Clock, MapPin, Search, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, Loader2, Info, ChevronRight } from "lucide-react"
+import type { Session } from "@supabase/supabase-js"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
@@ -23,8 +24,30 @@ interface Booking {
   user_email?: string
 }
 
+interface BookingsResponse {
+  items?: Booking[]
+}
+
+interface MeResponse {
+  role?: string
+}
+
+interface StatCardProps {
+  label: string
+  value: number
+  icon: React.ReactNode
+}
+
+type BookingStatusConfig = Record<Booking["status"], { label: string; className: string }>
+
+interface BookingItemProps {
+  booking: Booking
+  onCancel: () => void
+  isActionLoading: boolean
+}
+
 export default function BookingsPage() {
-  const [session, setSession] = React.useState<any>(null)
+  const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<"my" | "system">("my")
   const [bookings, setBookings] = React.useState<Booking[]>([])
   const [systemBookings, setSystemBookings] = React.useState<Booking[]>([])
@@ -43,7 +66,7 @@ export default function BookingsPage() {
         headers: { Authorization: `Bearer ${token}` }
       })
       if (res.ok) {
-        const data = await res.json()
+        const data = await res.json() as BookingsResponse
         if (tab === "my") setBookings(data.items || [])
         else setSystemBookings(data.items || [])
       }
@@ -63,12 +86,12 @@ export default function BookingsPage() {
         const meRes = await fetch(`${apiBaseUrl}/me`, {
           headers: { Authorization: `Bearer ${currentSession.access_token}` }
         })
-        const meData = await meRes.json()
+        const meData = await meRes.json() as MeResponse
         setIsAdmin(meData.role === 'admin' || meData.role === 'manager')
-        loadData(currentSession.access_token, activeTab)
+        void loadData(currentSession.access_token, activeTab)
       }
     }
-    bootstrap()
+    void bootstrap()
   }, [apiBaseUrl, activeTab, loadData])
 
   const handleAction = async (bookingId: string, action: 'cancel' | 'no-show' | 'complete') => {
@@ -76,7 +99,7 @@ export default function BookingsPage() {
     setActionLoading(bookingId)
     try {
       let endpoint = `${apiBaseUrl}/bookings/${bookingId}/cancel`
-      let method = "PATCH"
+      const method = "PATCH"
       
       if (action === 'no-show') endpoint = `${apiBaseUrl}/bookings/maintenance/no-show`
       if (action === 'complete') endpoint = `${apiBaseUrl}/bookings/maintenance/complete`
@@ -90,7 +113,7 @@ export default function BookingsPage() {
       })
       
       if (res.ok) {
-        loadData(session.access_token, activeTab)
+        void loadData(session.access_token, activeTab)
       }
     } catch (err) {
       console.error("Action error:", err)
@@ -116,7 +139,7 @@ export default function BookingsPage() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <div className="space-y-8" data-testid="bookings-page">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Booking Operations</h1>
@@ -124,6 +147,7 @@ export default function BookingsPage() {
           </div>
           <div className="flex items-center gap-2 glass p-1.5 rounded-2xl border-white/5">
             <button 
+              data-testid="bookings-tab-my"
               onClick={() => setActiveTab("my")}
               className={cn(
                 "px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
@@ -135,6 +159,7 @@ export default function BookingsPage() {
             </button>
             {isAdmin && (
               <button 
+                data-testid="bookings-tab-system"
                 onClick={() => setActiveTab("system")}
                 className={cn(
                   "px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
@@ -172,6 +197,7 @@ export default function BookingsPage() {
                 <div className="relative group">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={16} />
                   <Input 
+                    data-testid="bookings-search"
                     placeholder="Filter by name or email..." 
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
@@ -204,7 +230,7 @@ export default function BookingsPage() {
 
             <aside className="space-y-6">
               {activeTab === "system" && isAdmin && (
-                <Card className="glass-panel border-primary-500/20 bg-primary-500/5 overflow-hidden">
+                <Card data-testid="bookings-system-section" className="glass-panel border-primary-500/20 bg-primary-500/5 overflow-hidden">
                   <CardHeader className="bg-primary-500/10">
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Settings2 size={20} className="text-primary-500" />
@@ -219,6 +245,7 @@ export default function BookingsPage() {
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed font-medium">Terminate all reservations that missed the check-in window.</p>
                       <Button 
+                        data-testid="bookings-run-no-show"
                         onClick={() => handleAction('bulk', 'no-show')}
                         className="w-full bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/20 font-bold h-10 rounded-xl"
                       >
@@ -233,6 +260,7 @@ export default function BookingsPage() {
                       </div>
                       <p className="text-xs text-slate-400 leading-relaxed font-medium">Automatically complete all past-due sessions to free resources.</p>
                       <Button 
+                        data-testid="bookings-run-completed"
                         onClick={() => handleAction('bulk', 'complete')}
                         className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 font-bold h-10 rounded-xl"
                       >
@@ -270,7 +298,7 @@ export default function BookingsPage() {
   )
 }
 
-function StatCard({ label, value, icon }: any) {
+function StatCard({ label, value, icon }: StatCardProps) {
   return (
     <Card className="glass-panel border-white/5 hover:border-white/10 transition-all hover:scale-105 duration-300">
       <CardContent className="p-6">
@@ -286,23 +314,23 @@ function StatCard({ label, value, icon }: any) {
   )
 }
 
-function BookingItem({ booking, onCancel, isActionLoading }: any) {
-  const statusConfig: any = {
-    confirmed: { label: "Confirmed", class: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
-    checked_in: { label: "Checked In", class: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
-    completed: { label: "Completed", class: "bg-slate-500/10 text-slate-400 border-white/5" },
-    cancelled: { label: "Cancelled", class: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
-    no_show: { label: "No Show", class: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+function BookingItem({ booking, onCancel, isActionLoading }: BookingItemProps) {
+  const statusConfig: BookingStatusConfig = {
+    confirmed: { label: "Confirmed", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+    checked_in: { label: "Checked In", className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+    completed: { label: "Completed", className: "bg-slate-500/10 text-slate-400 border-white/5" },
+    cancelled: { label: "Cancelled", className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+    no_show: { label: "No Show", className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
   }
 
-  const cfg = statusConfig[booking.status] || statusConfig.confirmed
+  const cfg = statusConfig[booking.status]
 
   return (
     <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl border border-white/5 bg-white/5 hover:border-primary-500/30 transition-all gap-4">
       <div className="flex items-center gap-5">
         <div className={cn(
           "w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all group-hover:scale-110",
-          cfg.class
+          cfg.className
         )}>
           <Calendar size={28} />
         </div>
@@ -318,7 +346,7 @@ function BookingItem({ booking, onCancel, isActionLoading }: any) {
         </div>
       </div>
       <div className="flex items-center justify-between sm:justify-end gap-4">
-        <span className={cn("px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border", cfg.class)}>
+        <span className={cn("px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest border", cfg.className)}>
           {cfg.label}
         </span>
         <div className="flex items-center gap-2">

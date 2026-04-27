@@ -2,12 +2,11 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, CheckCircle, Clock, XCircle, ArrowRight, User, Scan, MapPin, AlertCircle, Loader2, Sparkles, Building2, Stars, Search } from "lucide-react"
+import { Calendar, ArrowRight, Scan, MapPin, Loader2, Building2, Stars, Search } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Button } from "@/components/premium/ui/button"
 import { Input } from "@/components/premium/ui/input"
 import { cn } from "@/lib/utils"
@@ -21,11 +20,22 @@ interface Booking {
   status: 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'no_show'
 }
 
+interface BookingsResponse {
+  items?: Booking[]
+}
+
+interface CategoryCardProps {
+  title: string
+  desc: string
+  count: string
+  icon: React.ReactNode
+  color: string
+  onClick: () => void
+}
+
 export default function DashboardPage() {
   const router = useRouter()
-  const [session, setSession] = React.useState<any>(null)
   const [loading, setLoading] = React.useState(true)
-  const [profile, setProfile] = React.useState<any>(null)
   const [bookings, setBookings] = React.useState<Booking[]>([])
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
@@ -34,15 +44,12 @@ export default function DashboardPage() {
     const bootstrap = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession()
       if (currentSession) {
-        setSession(currentSession)
         try {
-          const [meRes, bookingsRes] = await Promise.all([
-            fetch(`${apiBaseUrl}/me`, { headers: { Authorization: `Bearer ${currentSession.access_token}` } }),
-            fetch(`${apiBaseUrl}/bookings/my`, { headers: { Authorization: `Bearer ${currentSession.access_token}` } })
-          ])
-          if (meRes.ok) setProfile(await meRes.json())
+          const bookingsRes = await fetch(`${apiBaseUrl}/bookings/my`, {
+            headers: { Authorization: `Bearer ${currentSession.access_token}` }
+          })
           if (bookingsRes.ok) {
-            const data = await bookingsRes.json()
+            const data = await bookingsRes.json() as BookingsResponse
             setBookings(data.items || [])
           }
         } catch (err) {
@@ -77,7 +84,7 @@ export default function DashboardPage() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-16 pb-24">
+      <div className="max-w-6xl mx-auto space-y-16 pb-24" data-testid="dashboard-page">
         {/* --- HERO SECTION --- */}
         <section className="relative pt-10 pb-4 text-center space-y-8">
           <motion.div 
@@ -113,7 +120,7 @@ export default function DashboardPage() {
                    className="bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-600 h-12"
                  />
                </div>
-               <Button className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 font-black shadow-lg shadow-primary-500/20">
+               <Button data-testid="dashboard-open-floor-map" className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 font-black shadow-lg shadow-primary-500/20">
                  Explore Now
                </Button>
             </div>
@@ -182,7 +189,7 @@ export default function DashboardPage() {
         <section className="space-y-8">
           <div className="flex items-center justify-between">
             <h2 className="text-3xl font-black text-white">My Reservations</h2>
-            <Button variant="ghost" className="text-primary-500 hover:text-primary-400 font-bold" onClick={() => router.push("/bookings")}>
+            <Button data-testid="dashboard-open-bookings" variant="ghost" className="text-primary-500 hover:text-primary-400 font-bold" onClick={() => router.push("/bookings")}>
               View All History
             </Button>
           </div>
@@ -215,7 +222,7 @@ export default function DashboardPage() {
   )
 }
 
-function CategoryCard({ title, desc, count, icon, color, onClick }: any) {
+function CategoryCard({ title, desc, count, icon, color, onClick }: CategoryCardProps) {
   return (
     <button 
       onClick={onClick}
