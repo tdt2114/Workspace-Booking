@@ -4,8 +4,8 @@ import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Camera, QrCode, ArrowLeft, CheckCircle2, AlertCircle, History, Info, Send, Loader2, X } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { Html5QrcodeScanner } from "html5-qrcode"
 import type { Session } from "@supabase/supabase-js"
+import type { Html5Qrcode } from "html5-qrcode"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
@@ -28,9 +28,34 @@ interface CheckInResponse {
   message?: string
 }
 
+function findActiveCheckedInBooking(bookings: Booking[]) {
+  const now = Date.now()
+
+  return bookings
+    .filter((booking) => booking.status === "checked_in" && new Date(booking.end_time).getTime() > now)
+    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0] ?? null
+}
+
+function findNextRelevantBooking(bookings: Booking[]) {
+  const now = Date.now()
+
+  return bookings
+    .filter((booking) => {
+      if (booking.status !== "confirmed" && booking.status !== "checked_in") {
+        return false
+      }
+
+      return new Date(booking.end_time).getTime() > now
+    })
+    .sort((a, b) => new Date(a.start_time).getTime() - new Date(b.start_time).getTime())[0] ?? null
+}
+
 export default function CheckInPage() {
   const router = useRouter()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
+  const scannerContainerRef = React.useRef<HTMLDivElement | null>(null)
+  const html5QrcodeRef = React.useRef<Html5Qrcode | null>(null)
+  const hasDecodedRef = React.useRef(false)
   
   const [session, setSession] = React.useState<Session | null>(null)
   const [qrValue, setQrValue] = React.useState("")
@@ -47,6 +72,7 @@ export default function CheckInPage() {
   const [errorMessage, setErrorMessage] = React.useState<string | null>(null)
   const [nextBooking, setNextBooking] = React.useState<Booking | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
+  const [isScannerStarting, setIsScannerStarting] = React.useState(false)
 
   // --- Auth & Initial Data ---
   React.useEffect(() => {
@@ -65,8 +91,15 @@ export default function CheckInPage() {
         })
         if (res.ok) {
           const data = await res.json() as BookingsResponse
-          const upcoming = data.items?.find((b) => b.status === "confirmed" || b.status === "checked_in")
-          setNextBooking(upcoming || null)
+          const bookings = data.items ?? []
+          const activeCheckedInBooking = findActiveCheckedInBooking(bookings)
+          const upcoming = findNextRelevantBooking(bookings)
+
+          setNextBooking(activeCheckedInBooking ?? upcoming)
+
+          if (activeCheckedInBooking) {
+            setStatus("success")
+          }
         }
       } catch (err) {
         console.error("Failed to load upcoming booking:", err)
@@ -96,6 +129,12 @@ export default function CheckInPage() {
 
       const data = await res.json() as CheckInResponse
       if (res.ok) {
+        if (nextBooking) {
+          setNextBooking({
+            ...nextBooking,
+            status: "checked_in",
+          })
+        }
         setStatus("success")
       } else {
         setStatus("error")
@@ -107,38 +146,159 @@ export default function CheckInPage() {
     } finally {
       setIsSubmitting(false)
     }
-  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, session])
+  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session])
+
+  const stopScanner = React.useCallback(async () => {
+    const scanner = html5QrcodeRef.current
+
+    if (!scanner) {
+      return
+    }
+
+    html5QrcodeRef.current = null
+
+    try {
+      if (scanner.isScanning) {
+        await scanner.stop()
+      }
+    } catch (err) {
+      console.error("Failed to stop scanner:", err)
+    }
+
+    try {
+      await scanner.clear()
+    } catch (err) {
+      console.error("Failed to clear scanner:", err)
+    }
+  }, [])
 
   React.useEffect(() => {
-    if (status === "scanning") {
-      const scanner = new Html5QrcodeScanner(
-        "reader",
-        { fps: 10, qrbox: { width: 250, height: 250 } },
-        false
-      )
+    if (status !== "scanning") {
+      return
+    }
 
-      scanner.render(
-        (decodedText) => {
-          void scanner.clear()
-          void handleCheckIn(decodedText)
-        },
-        () => {}
-      )
+    let cancelled = false
+    let retryTimeoutId: number | null = null
+    let attempts = 0
 
-      return () => {
-        scanner.clear().catch(console.error)
+    hasDecodedRef.current = false
+
+    const initializeScanner = async () => {
+      if (cancelled) {
+        return
+      }
+
+      const container = scannerContainerRef.current
+
+      if (!container) {
+        if (attempts < 10) {
+          attempts += 1
+          retryTimeoutId = window.setTimeout(() => {
+            void initializeScanner()
+          }, 100)
+        } else {
+          setIsScannerStarting(false)
+          setStatus("error")
+          setErrorMessage("Scanner failed to initialize. Please try again.")
+        }
+        return
+      }
+
+      try {
+        const { Html5Qrcode } = await import("html5-qrcode")
+        const scanner = new Html5Qrcode(container.id)
+        html5QrcodeRef.current = scanner
+
+        await scanner.start(
+          { facingMode: "environment" },
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          (decodedText) => {
+            if (hasDecodedRef.current) {
+              return
+            }
+
+            hasDecodedRef.current = true
+            void (async () => {
+              await stopScanner()
+              void handleCheckIn(decodedText)
+            })()
+          },
+          () => {},
+        )
+
+        if (!cancelled) {
+          setIsScannerStarting(false)
+        }
+      } catch (err) {
+        console.error("Scanner start error:", err)
+        await stopScanner()
+
+        if (!cancelled) {
+          setIsScannerStarting(false)
+          setStatus("error")
+          setErrorMessage("Camera could not be started. Please check browser permissions and try again.")
+        }
       }
     }
-  }, [handleCheckIn, status])
+
+    retryTimeoutId = window.setTimeout(() => {
+      void initializeScanner()
+    }, 0)
+
+    return () => {
+      cancelled = true
+
+      if (retryTimeoutId !== null) {
+        window.clearTimeout(retryTimeoutId)
+      }
+
+      hasDecodedRef.current = false
+      setIsScannerStarting(false)
+      void stopScanner()
+    }
+  }, [handleCheckIn, status, stopScanner])
+
+  React.useEffect(() => {
+    return () => {
+      void stopScanner()
+    }
+  }, [stopScanner])
+
+  const handleStartScanner = React.useCallback(() => {
+    if (typeof window !== "undefined" && !window.isSecureContext) {
+      setErrorMessage("Camera access requires HTTPS or localhost.")
+      setStatus("error")
+      return
+    }
+
+    setIsScannerStarting(true)
+    setErrorMessage(null)
+    setStatus("scanning")
+  }, [])
+
+  const handleCancelScanner = React.useCallback(() => {
+    setStatus("idle")
+    setIsScannerStarting(false)
+    void stopScanner()
+  }, [stopScanner])
+
+  const handleGoToDashboard = React.useCallback(() => {
+    if (typeof window !== "undefined") {
+      window.location.assign("/dashboard")
+      return
+    }
+
+    router.push("/dashboard")
+  }, [router])
 
   return (
     <div className="min-h-screen bg-[#0B0E14] text-white flex flex-col font-inter overflow-hidden relative" data-testid="check-in-page">
       {/* Background Orbs */}
-      <div className="absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary-900/10 rounded-full blur-[120px]" />
+      <div className="pointer-events-none absolute top-[-10%] right-[-10%] w-[50%] h-[50%] bg-primary-900/10 rounded-full blur-[120px]" />
       
       {/* Mobile Navbar */}
       <nav className="p-6 flex items-center justify-between z-10">
-        <button onClick={() => router.back()} className="w-12 h-12 rounded-2xl glass flex items-center justify-center text-slate-400 hover:text-white transition-all active:scale-90">
+        <button type="button" onClick={() => router.back()} className="w-12 h-12 touch-manipulation rounded-2xl glass flex items-center justify-center text-slate-400 hover:text-white transition-all active:scale-90">
           <ArrowLeft size={24} />
         </button>
         <h1 className="text-xl font-black tracking-tight text-gradient">Executive Check-in</h1>
@@ -154,10 +314,10 @@ export default function CheckInPage() {
         {/* Scanner Area */}
         <section className="relative aspect-square w-full max-w-[340px] mx-auto">
           {/* Decorative Corners */}
-          <div className="absolute top-0 left-0 w-16 h-16 border-t-[6px] border-l-[6px] border-primary-500 rounded-tl-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
-          <div className="absolute top-0 right-0 w-16 h-16 border-t-[6px] border-r-[6px] border-primary-500 rounded-tr-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
-          <div className="absolute bottom-0 left-0 w-16 h-16 border-b-[6px] border-l-[6px] border-primary-500 rounded-bl-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
-          <div className="absolute bottom-0 right-0 w-16 h-16 border-b-[6px] border-r-[6px] border-primary-500 rounded-br-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
+          <div className="pointer-events-none absolute top-0 left-0 w-16 h-16 border-t-[6px] border-l-[6px] border-primary-500 rounded-tl-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
+          <div className="pointer-events-none absolute top-0 right-0 w-16 h-16 border-t-[6px] border-r-[6px] border-primary-500 rounded-tr-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
+          <div className="pointer-events-none absolute bottom-0 left-0 w-16 h-16 border-b-[6px] border-l-[6px] border-primary-500 rounded-bl-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
+          <div className="pointer-events-none absolute bottom-0 right-0 w-16 h-16 border-b-[6px] border-r-[6px] border-primary-500 rounded-br-[3rem] z-20 shadow-[0_0_15px_rgba(59,130,246,0.3)]" />
 
           {/* Scanner Content */}
           <div className="absolute inset-4 rounded-[2.5rem] bg-slate-900/80 backdrop-blur-xl overflow-hidden flex items-center justify-center border border-white/10 shadow-2xl">
@@ -167,18 +327,33 @@ export default function CheckInPage() {
                   <div className="w-24 h-24 rounded-3xl bg-primary-500/10 flex items-center justify-center mx-auto text-primary-500 ring-1 ring-primary-500/20">
                     <Camera size={48} />
                   </div>
-                  <Button onClick={() => setStatus("scanning")} className="bg-primary-600 hover:bg-primary-700 font-black h-14 px-10 rounded-2xl shadow-xl shadow-primary-500/20 active:scale-95 transition-all">
-                    Initialize Scanner
+                  <Button onClick={handleStartScanner} disabled={isScannerStarting || isSubmitting} className="bg-primary-600 hover:bg-primary-700 font-black h-14 px-10 rounded-2xl shadow-xl shadow-primary-500/20 active:scale-95 transition-all">
+                    {isScannerStarting ? (
+                      <>
+                        <Loader2 className="mr-2 animate-spin" size={18} />
+                        Opening Camera
+                      </>
+                    ) : (
+                      "Initialize Scanner"
+                    )}
                   </Button>
                 </motion.div>
               )}
 
               {status === "scanning" && (
                 <motion.div key="scanning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full h-full relative">
-                  <div id="reader" className="w-full h-full object-cover [&>div]:!border-none" />
-                  <motion.div animate={{ top: ["5%", "95%", "5%"] }} transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }} className="absolute left-6 right-6 h-1 bg-primary-500 shadow-[0_0_20px_rgba(59,130,246,0.8)] z-30" />
+                  <div ref={scannerContainerRef} id="reader" className="w-full h-full object-cover [&>div]:!border-none" />
+                  {isScannerStarting && (
+                    <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-slate-950/80 backdrop-blur-sm">
+                      <Loader2 className="animate-spin text-primary-500" size={36} />
+                      <p className="max-w-[220px] text-center text-sm font-semibold text-slate-300">
+                        Requesting camera access and preparing the scanner.
+                      </p>
+                    </div>
+                  )}
+                  <motion.div animate={{ top: ["5%", "95%", "5%"] }} transition={{ duration: 2.5, repeat: Infinity, ease: "easeInOut" }} className="pointer-events-none absolute left-6 right-6 h-1 bg-primary-500 shadow-[0_0_20px_rgba(59,130,246,0.8)] z-30" />
                   <div className="absolute bottom-6 left-0 right-0 flex justify-center z-30">
-                     <button onClick={() => setStatus("idle")} className="p-3 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md">
+                     <button type="button" onClick={handleCancelScanner} className="touch-manipulation p-3 bg-white/10 hover:bg-white/20 rounded-full backdrop-blur-md">
                         <X size={24} />
                      </button>
                   </div>
@@ -194,7 +369,7 @@ export default function CheckInPage() {
                     <h4 className="text-2xl font-black text-white">Check-in Verified</h4>
                     <p className="text-slate-400 mt-2 font-medium">Your session is now active. <br/>Enjoy your workspace!</p>
                   </div>
-                  <Button onClick={() => router.push("/dashboard")} className="bg-emerald-600 hover:bg-emerald-700 w-full h-12 rounded-xl font-bold">
+                  <Button onClick={handleGoToDashboard} className="bg-emerald-600 hover:bg-emerald-700 w-full h-12 rounded-xl font-bold">
                     Go to Dashboard
                   </Button>
                 </motion.div>
@@ -221,7 +396,7 @@ export default function CheckInPage() {
         {/* Manual Input */}
         <div className="space-y-4">
           <div className="flex items-center justify-center">
-            <button data-testid="check-in-toggle-manual" onClick={() => setManual(!manual)} className="text-sm font-bold text-slate-500 hover:text-white flex items-center gap-2 transition-all">
+            <button type="button" data-testid="check-in-toggle-manual" onClick={() => setManual(!manual)} className="touch-manipulation text-sm font-bold text-slate-500 hover:text-white flex items-center gap-2 transition-all">
               <QrCode size={18} />
               {manual ? "Hide manual interface" : "Use manual entry code"}
             </button>

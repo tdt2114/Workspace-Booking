@@ -184,7 +184,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       </AnimatePresence>
 
       {/* --- MAIN CONTENT --- */}
-      <main className="pt-32 px-6 lg:px-12 max-w-[1600px] mx-auto relative">
+      <main className="relative mx-auto max-w-[1600px] px-6 pb-32 pt-32 lg:px-12 lg:pb-12">
         {/* Background Ambient Orbs */}
         <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[80%] h-[40%] bg-primary-900/10 rounded-full blur-[160px] pointer-events-none -z-10" />
         <div className="fixed bottom-0 right-0 w-[30%] h-[30%] bg-blue-900/5 rounded-full blur-[140px] pointer-events-none -z-10" />

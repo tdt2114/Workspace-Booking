@@ -290,12 +290,12 @@ export function FloorMapPremium() {
   return (
     <div className="flex flex-col h-full space-y-6" data-testid="floor-map-shell">
       {/* Filters Bar */}
-      <div className="flex flex-wrap items-center gap-4">
+      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center">
         <div className="flex items-center gap-2 glass px-4 py-2 rounded-2xl border-white/5">
           <Building size={18} className="text-slate-400" />
           <select 
             data-testid="floor-map-floor-select"
-            className="bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
+            className="min-w-0 flex-1 bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
             onChange={(e) => setSelectedFloorId(e.target.value)}
             value={selectedFloorId}
           >
@@ -307,38 +307,38 @@ export function FloorMapPremium() {
           </select>
         </div>
 
-        <div className="flex items-center gap-3 glass px-4 py-2 rounded-2xl border-white/5">
+        <div className="flex flex-col gap-3 glass px-4 py-3 rounded-2xl border-white/5 sm:flex-row sm:items-center">
           <Clock size={18} className="text-slate-400" />
-          <div className="flex items-center gap-2">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
             <input 
               data-testid="floor-map-view-start"
               type="datetime-local" 
-              className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
+              className="min-w-0 bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
               value={viewStart}
               onChange={(e) => setViewStart(e.target.value)}
             />
-            <span className="text-slate-600">to</span>
+            <span className="text-slate-600 text-xs uppercase tracking-[0.2em]">to</span>
             <input 
               data-testid="floor-map-view-end"
               type="datetime-local" 
-              className="bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
+              className="min-w-0 bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
               value={viewEnd}
               onChange={(e) => setViewEnd(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="flex-1" />
+        <div className="hidden flex-1 lg:block" />
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <StatusBadge color="bg-emerald-500" label="Available" />
           <StatusBadge color="bg-red-500" label="Occupied" />
         </div>
       </div>
 
-      <div className="relative flex-1 min-h-[500px] flex gap-6">
+      <div className="relative flex min-h-[500px] flex-col gap-6 lg:flex-1 lg:flex-row">
         {/* Map Container */}
-        <Card className="flex-1 glass-panel border-white/5 relative overflow-hidden flex items-center justify-center p-8">
+        <Card className="relative flex min-h-[320px] flex-1 items-center justify-center overflow-hidden border-white/5 p-4 glass-panel sm:min-h-[420px] sm:p-8 lg:min-h-0">
           {processedSvg ? (
             <div 
               data-testid="floor-map-svg-container"
@@ -360,7 +360,7 @@ export function FloorMapPremium() {
           )}
 
           {/* Zoom Controls Overlay */}
-          <div className="absolute bottom-6 left-6 flex items-center glass p-1 rounded-xl border-white/10">
+          <div className="absolute bottom-4 left-4 flex items-center rounded-xl border-white/10 p-1 glass sm:bottom-6 sm:left-6">
             <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white transition-colors"><ZoomIn size={20} /></Button>
             <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white transition-colors"><ZoomOut size={20} /></Button>
             <div className="w-[1px] h-6 bg-white/10 mx-1" />
@@ -375,26 +375,26 @@ export function FloorMapPremium() {
               initial={{ x: 350, opacity: 0 }}
               animate={{ x: 0, opacity: 1 }}
               exit={{ x: 350, opacity: 0 }}
-              className="w-80 shrink-0"
+              className="w-full shrink-0 lg:w-80"
             >
-              <Card className="h-full glass-panel border-white/10 overflow-hidden flex flex-col">
-                <div className="p-6 border-b border-white/5 flex items-center justify-between bg-primary-500/5">
+              <Card className="flex flex-col overflow-hidden border-white/10 glass-panel lg:h-full">
+                <div className="flex items-center justify-between border-b border-white/5 bg-primary-500/5 p-5 sm:p-6">
                   <h3 className="text-xl font-bold text-white">Booking Details</h3>
                   <Button variant="ghost" size="icon" onClick={() => setSelectedWorkspaceId(null)} className="text-slate-500 hover:text-white">
                     <ChevronRight />
                   </Button>
                 </div>
                 
-                <div className="flex-1 p-6 space-y-8">
+                <div className="flex-1 space-y-6 p-5 sm:space-y-8 sm:p-6">
                   <div className="space-y-4">
                     <div className="w-full aspect-video rounded-2xl bg-gradient-to-br from-blue-600/20 to-primary-600/20 flex items-center justify-center border border-primary-500/10">
                       <Layers size={48} className="text-primary-500 opacity-50" />
                     </div>
                     <div>
-                      <h4 data-testid="floor-map-selected-workspace-name" className="text-2xl font-black text-white">{selectedWorkspace?.name}</h4>
+                      <h4 data-testid="floor-map-selected-workspace-name" className="text-2xl font-black text-white break-words">{selectedWorkspace?.name}</h4>
                       <p className="text-slate-400 text-sm font-medium">{selectedFloor?.name || `Floor ${selectedFloor?.floor_number}`}</p>
                       {selectedWorkspace?.qr_code_value ? (
-                        <p data-testid="floor-map-selected-workspace-qr" className="text-xs font-mono text-slate-500 mt-2">
+                        <p data-testid="floor-map-selected-workspace-qr" className="mt-2 break-all text-xs font-mono text-slate-500">
                           {selectedWorkspace.qr_code_value}
                         </p>
                       ) : null}
@@ -445,7 +445,7 @@ export function FloorMapPremium() {
                   )}
                 </div>
 
-                <div className="p-6 border-t border-white/5 bg-white/5">
+                <div className="sticky bottom-0 border-t border-white/5 bg-[#111722]/95 p-5 pb-28 backdrop-blur sm:p-6 sm:pb-28 lg:static lg:bg-white/5 lg:pb-6 lg:backdrop-blur-0">
                   <Button 
                     data-testid="floor-map-create-booking"
                     className="w-full bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20 active:scale-[0.98] transition-all disabled:opacity-50"

@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
 import { Calendar, ArrowRight, Scan, MapPin, Loader2, Building2, Stars, Search } from "lucide-react"
 import { useRouter } from "next/navigation"
@@ -30,7 +31,7 @@ interface CategoryCardProps {
   count: string
   icon: React.ReactNode
   color: string
-  onClick: () => void
+  href: string
 }
 
 export default function DashboardPage() {
@@ -120,8 +121,8 @@ export default function DashboardPage() {
                    className="bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-600 h-12"
                  />
                </div>
-               <Button data-testid="dashboard-open-floor-map" className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 font-black shadow-lg shadow-primary-500/20">
-                 Explore Now
+               <Button asChild data-testid="dashboard-open-floor-map" className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 font-black shadow-lg shadow-primary-500/20">
+                 <Link href="/floor-map">Explore Now</Link>
                </Button>
             </div>
           </motion.div>
@@ -148,10 +149,10 @@ export default function DashboardPage() {
                 </div>
               </div>
               <Button 
-                onClick={() => router.push("/check-in")}
+                asChild
                 className="w-full md:w-auto h-16 px-12 bg-white text-slate-950 hover:bg-slate-100 font-black rounded-2xl text-lg shadow-2xl transition-transform active:scale-95"
               >
-                CHECK-IN NOW
+                <Link href="/check-in">CHECK-IN NOW</Link>
               </Button>
             </motion.div>
           )}
@@ -165,7 +166,7 @@ export default function DashboardPage() {
              count="12 available" 
              icon={<MapPin size={24} />} 
              color="bg-blue-500"
-             onClick={() => router.push("/floor-map")}
+             href="/floor-map"
            />
            <CategoryCard 
              title="Meeting Rooms" 
@@ -173,7 +174,7 @@ export default function DashboardPage() {
              count="4 available" 
              icon={<Building2 size={24} />} 
              color="bg-primary-500"
-             onClick={() => router.push("/floor-map")}
+             href="/floor-map"
            />
            <CategoryCard 
              title="Creative Zones" 
@@ -181,7 +182,7 @@ export default function DashboardPage() {
              count="Ready now" 
              icon={<Stars size={24} />} 
              color="bg-emerald-500"
-             onClick={() => router.push("/floor-map")}
+             href="/floor-map"
            />
         </div>
 
@@ -189,8 +190,8 @@ export default function DashboardPage() {
         <section className="space-y-8">
           <div className="flex items-center justify-between">
             <h2 className="text-3xl font-black text-white">My Reservations</h2>
-            <Button data-testid="dashboard-open-bookings" variant="ghost" className="text-primary-500 hover:text-primary-400 font-bold" onClick={() => router.push("/bookings")}>
-              View All History
+            <Button asChild data-testid="dashboard-open-bookings" variant="ghost" className="text-primary-500 hover:text-primary-400 font-bold">
+              <Link href="/bookings">View All History</Link>
             </Button>
           </div>
           
@@ -222,10 +223,10 @@ export default function DashboardPage() {
   )
 }
 
-function CategoryCard({ title, desc, count, icon, color, onClick }: CategoryCardProps) {
+function CategoryCard({ title, desc, count, icon, color, href }: CategoryCardProps) {
   return (
-    <button 
-      onClick={onClick}
+    <Link 
+      href={href}
       className="group p-8 glass rounded-[3rem] border-white/5 hover:border-white/20 text-left transition-all hover:scale-[1.02] active:scale-[0.98]"
     >
       <div className={cn("w-14 h-14 rounded-2xl flex items-center justify-center text-white mb-6 shadow-xl", color)}>
@@ -239,6 +240,6 @@ function CategoryCard({ title, desc, count, icon, color, onClick }: CategoryCard
           <ArrowRight size={20} />
         </div>
       </div>
-    </button>
+    </Link>
   )
 }
