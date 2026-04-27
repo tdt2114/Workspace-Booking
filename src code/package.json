@@ -10,6 +10,7 @@
     "dev:web": "npm run dev --workspace web",
     "dev:final": "npm run dev --workspace web-final -- --port 3002",
     "dev:api": "npm run start:dev --workspace api",
+    "start:final": "npm run start --workspace web-final -- --hostname 0.0.0.0 --port 3002",
     "build:web": "npm run build --workspace web",
     "build:final": "npm run build --workspace web-final",
     "build:api": "npm run build --workspace api",
@@ -17,6 +18,9 @@
     "lint:api": "npm run lint --workspace api",
     "test:api": "npm run test --workspace api",
     "test:e2e:api": "npm run test:e2e --workspace api",
-    "test:e2e:web": "npm run test:e2e --workspace web"
+    "test:e2e:web": "npm run test:e2e --workspace web",
+    "mobile:up": "powershell -ExecutionPolicy Bypass -File ./scripts/mobile-up.ps1",
+    "mobile:down": "powershell -ExecutionPolicy Bypass -File ./scripts/mobile-down.ps1",
+    "mobile:status": "powershell -ExecutionPolicy Bypass -File ./scripts/mobile-status.ps1"
   }
 }

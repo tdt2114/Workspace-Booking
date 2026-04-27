@@ -7,28 +7,25 @@ function trimTrailingSlash(value: string) {
 export function getBrowserApiBaseUrl() {
   const envValue = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   const fallbackUrl = "http://localhost:3001";
+  const browserFallbackUrl = "/api";
 
   if (typeof window === "undefined") {
     return envValue ? trimTrailingSlash(envValue) : fallbackUrl;
   }
 
-  const browserFallbackUrl = `${window.location.protocol}//${window.location.hostname}:3001`;
-
   if (!envValue) {
     return browserFallbackUrl;
+  }
+
+  if (envValue.startsWith("/")) {
+    return trimTrailingSlash(envValue);
   }
 
   try {
     const parsedUrl = new URL(envValue);
 
     if (LOCAL_API_HOSTS.has(parsedUrl.hostname)) {
-      parsedUrl.hostname = window.location.hostname;
-
-      if (!parsedUrl.port) {
-        parsedUrl.port = "3001";
-      }
-
-      return trimTrailingSlash(parsedUrl.toString());
+      return browserFallbackUrl;
     }
 
     return trimTrailingSlash(parsedUrl.toString());
