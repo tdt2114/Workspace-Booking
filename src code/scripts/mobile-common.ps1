@@ -74,14 +74,24 @@ function Stop-MobileProcessTree {
     [int]$Id
   )
 
-  $children = Get-CimInstance Win32_Process -Filter "ParentProcessId = $Id" -ErrorAction SilentlyContinue
+  $children = @(Get-CimInstance Win32_Process -Filter "ParentProcessId = $Id" -ErrorAction SilentlyContinue)
 
   foreach ($child in $children) {
-    Stop-MobileProcessTree -Id $child.ProcessId
+    try {
+      Stop-MobileProcessTree -Id $child.ProcessId
+    } catch {
+      # Child processes can exit naturally while shutdown is running.
+    }
   }
 
   if (Test-MobileProcessAlive -Id $Id) {
-    Stop-Process -Id $Id -Force -ErrorAction Stop
+    try {
+      Stop-Process -Id $Id -Force -ErrorAction Stop
+    } catch [Microsoft.PowerShell.Commands.ProcessCommandException] {
+      # Treat already-exited processes as successfully cleaned up.
+    } catch [System.ArgumentException] {
+      # Some Windows process lookups race with process exit.
+    }
   }
 }
 

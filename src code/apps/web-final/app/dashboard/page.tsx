@@ -10,6 +10,7 @@ import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Input } from "@/components/premium/ui/input"
+import { useLanguage } from "@/components/premium/language-provider"
 import { cn } from "@/lib/utils"
 
 interface Booking {
@@ -36,8 +37,10 @@ interface CategoryCardProps {
 
 export default function DashboardPage() {
   const router = useRouter()
+  const { locale, t } = useLanguage()
   const [loading, setLoading] = React.useState(true)
   const [bookings, setBookings] = React.useState<Booking[]>([])
+  const dateLocale = locale === "vi" ? "vi-VN" : undefined
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
 
@@ -95,14 +98,14 @@ export default function DashboardPage() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-500/10 border border-primary-500/20 text-primary-400 text-xs font-black uppercase tracking-[0.2em]">
               <Stars size={14} />
-              Welcome to the Hub
+              {t("dashboard.hub")}
             </div>
             <h1 className="text-5xl md:text-7xl font-black text-white tracking-tighter leading-[0.9]">
-              Find your ideal <br/>
-              <span className="text-gradient">Work Experience.</span>
+              {t("dashboard.heroLine1")} <br/>
+              <span className="text-gradient">{t("dashboard.heroAccent")}</span>
             </h1>
             <p className="text-lg text-slate-400 max-w-xl mx-auto font-medium">
-              Book premium desks, meeting rooms and creative spaces with one touch. Seamlessly integrated for your productivity.
+              {t("dashboard.heroDescription")}
             </p>
           </motion.div>
 
@@ -117,12 +120,12 @@ export default function DashboardPage() {
                <div className="flex-1 flex items-center px-6">
                  <Search className="text-slate-500" size={20} />
                  <Input 
-                   placeholder="Search buildings, floors or desks..." 
+                   placeholder={t("dashboard.searchPlaceholder")}
                    className="bg-transparent border-none focus:ring-0 text-white placeholder:text-slate-600 h-12"
                  />
                </div>
                <Button asChild data-testid="dashboard-open-floor-map" className="h-14 px-10 rounded-2xl bg-primary-600 hover:bg-primary-700 font-black shadow-lg shadow-primary-500/20">
-                 <Link href="/floor-map">Explore Now</Link>
+                 <Link href="/floor-map">{t("dashboard.exploreNow")}</Link>
                </Button>
             </div>
           </motion.div>
@@ -142,9 +145,9 @@ export default function DashboardPage() {
                   <Scan size={40} className="animate-pulse" />
                 </div>
                 <div className="space-y-1">
-                  <h3 className="text-2xl font-black text-white">Your session is ready.</h3>
+                  <h3 className="text-2xl font-black text-white">{t("dashboard.sessionReady")}</h3>
                   <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px]">
-                    {checkInTarget.workspace_name} • Starts at {new Date(checkInTarget.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    {checkInTarget.workspace_name} • {t("dashboard.startsAt")} {new Date(checkInTarget.start_time).toLocaleTimeString(dateLocale, {hour: '2-digit', minute:'2-digit'})}
                   </p>
                 </div>
               </div>
@@ -152,7 +155,7 @@ export default function DashboardPage() {
                 asChild
                 className="w-full md:w-auto h-16 px-12 bg-white text-slate-950 hover:bg-slate-100 font-black rounded-2xl text-lg shadow-2xl transition-transform active:scale-95"
               >
-                <Link href="/check-in">CHECK-IN NOW</Link>
+                <Link href="/check-in">{t("dashboard.checkInNow")}</Link>
               </Button>
             </motion.div>
           )}
@@ -161,25 +164,25 @@ export default function DashboardPage() {
         {/* --- MAIN CONTENT: MARKETPLACE STYLE --- */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
            <CategoryCard 
-             title="Dedicated Desks" 
-             desc="Your own private spot for the day." 
-             count="12 available" 
+             title={t("dashboard.categories.desksTitle")}
+             desc={t("dashboard.categories.desksDesc")}
+             count={t("dashboard.categories.desksCount")}
              icon={<MapPin size={24} />} 
              color="bg-blue-500"
              href="/floor-map"
            />
            <CategoryCard 
-             title="Meeting Rooms" 
-             desc="Equipped with top-tier tech." 
-             count="4 available" 
+             title={t("dashboard.categories.roomsTitle")}
+             desc={t("dashboard.categories.roomsDesc")}
+             count={t("dashboard.categories.roomsCount")}
              icon={<Building2 size={24} />} 
              color="bg-primary-500"
              href="/floor-map"
            />
            <CategoryCard 
-             title="Creative Zones" 
-             desc="Open spaces for collaboration." 
-             count="Ready now" 
+             title={t("dashboard.categories.zonesTitle")}
+             desc={t("dashboard.categories.zonesDesc")}
+             count={t("dashboard.categories.zonesCount")}
              icon={<Stars size={24} />} 
              color="bg-emerald-500"
              href="/floor-map"
@@ -189,9 +192,9 @@ export default function DashboardPage() {
         {/* --- RECENT BOOKINGS --- */}
         <section className="space-y-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-black text-white">My Reservations</h2>
+            <h2 className="text-3xl font-black text-white">{t("dashboard.reservations")}</h2>
             <Button asChild data-testid="dashboard-open-bookings" variant="ghost" className="text-primary-500 hover:text-primary-400 font-bold">
-              <Link href="/bookings">View All History</Link>
+              <Link href="/bookings">{t("dashboard.viewHistory")}</Link>
             </Button>
           </div>
           
@@ -205,7 +208,7 @@ export default function DashboardPage() {
                     </div>
                     <div>
                       <h4 className="text-xl font-bold text-white">{b.workspace_name}</h4>
-                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">{b.floor_name} • {new Date(b.start_time).toLocaleDateString()}</p>
+                      <p className="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">{b.floor_name} • {new Date(b.start_time).toLocaleDateString(dateLocale)}</p>
                     </div>
                   </div>
                   <ArrowRight size={24} className="text-slate-800 group-hover:text-primary-500 transition-transform group-hover:translate-x-2" />
@@ -213,7 +216,7 @@ export default function DashboardPage() {
               ))
             ) : (
               <div className="md:col-span-2 py-20 glass rounded-[2.5rem] border-dashed border-2 border-white/5 text-center opacity-30">
-                <p className="text-lg font-bold">No upcoming bookings. Discover a new spot above!</p>
+                <p className="text-lg font-bold">{t("dashboard.emptyBookings")}</p>
               </div>
             )}
           </div>

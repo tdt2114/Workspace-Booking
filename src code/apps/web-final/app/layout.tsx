@@ -1,4 +1,6 @@
 import { Outfit, Inter } from "next/font/google";
+import { LanguageProvider } from "@/components/premium/language-provider";
+import { ThemeProvider } from "@/components/premium/theme-provider";
 import "./globals.css";
 
 const outfit = Outfit({
@@ -24,9 +26,11 @@ export default function FinalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${outfit.variable} ${inter.variable}`}>
+    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${inter.variable}`}>
       <body className="antialiased min-h-screen flex flex-col">
-        {children}
+        <ThemeProvider>
+          <LanguageProvider>{children}</LanguageProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

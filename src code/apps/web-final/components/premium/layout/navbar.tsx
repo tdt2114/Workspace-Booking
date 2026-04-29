@@ -4,14 +4,17 @@ import * as React from "react"
 import { Bell, User, Search } from "lucide-react"
 import { Button } from "@/components/premium/ui/button"
 import { Input } from "@/components/premium/ui/input"
+import { useLanguage } from "@/components/premium/language-provider"
 
 export function Navbar() {
+  const { t } = useLanguage()
+
   return (
     <header className="h-16 flex items-center justify-between px-8 glass-panel border-b border-white/5 z-10">
       <div className="flex-1 max-w-md relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
         <Input 
-          placeholder="Search for desks, colleagues..." 
+          placeholder={t("legacy.searchPlaceholder")}
           className="pl-10 bg-white/5 border-white/10 focus-visible:ring-primary-500/50"
         />
       </div>
@@ -26,8 +29,8 @@ export function Navbar() {
 
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end">
-            <span className="text-sm font-semibold text-white">Admin Demo</span>
-            <span className="text-xs text-slate-500">Administrator</span>
+            <span className="text-sm font-semibold text-white">{t("legacy.adminDemo")}</span>
+            <span className="text-xs text-slate-500">{t("legacy.administrator")}</span>
           </div>
           <div className="w-10 h-10 rounded-full bg-primary-500/20 border border-primary-500/50 flex items-center justify-center text-primary-500">
             <User size={20} />

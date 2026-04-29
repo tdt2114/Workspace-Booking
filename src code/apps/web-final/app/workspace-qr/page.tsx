@@ -9,6 +9,7 @@ import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { cn } from "@/lib/utils"
@@ -36,6 +37,7 @@ interface FloorsResponse {
 }
 
 export default function WorkspaceQrPage() {
+  const { t } = useLanguage()
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([])
   const [floors, setFloors] = React.useState<Floor[]>([])
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
@@ -115,12 +117,12 @@ export default function WorkspaceQrPage() {
       <div className="space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">QR Asset Manager</h1>
-            <p className="text-slate-400 font-medium">Generate high-fidelity labels for physical workspace identification.</p>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">{t("qr.title")}</h1>
+            <p className="text-slate-400 font-medium">{t("qr.subtitle")}</p>
           </div>
           <Button className="bg-primary-600 hover:bg-primary-700 font-black h-12 px-8 shadow-lg shadow-primary-500/20 gap-2">
             <Printer size={20} />
-            Bulk Export
+            {t("qr.bulkExport")}
           </Button>
         </div>
 
@@ -131,7 +133,7 @@ export default function WorkspaceQrPage() {
               <div className="relative flex-1 min-w-[240px]">
                 <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500" size={18} />
                 <Input 
-                  placeholder="Search workspaces..." 
+                  placeholder={t("qr.searchPlaceholder")}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-12 bg-white/5 border-white/10 h-12 rounded-xl focus:border-primary-500"
@@ -144,10 +146,10 @@ export default function WorkspaceQrPage() {
                   value={selectedFloorId}
                   onChange={(e) => setSelectedFloorId(e.target.value)}
                 >
-                  <option value="all" className="bg-slate-900">All Floors</option>
+                  <option value="all" className="bg-slate-900">{t("qr.allFloors")}</option>
                   {floors.map(f => (
                     <option key={f.id} value={f.id} className="bg-slate-900">
-                      {f.name || `Floor ${f.floor_number}`}
+                      {f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}
                     </option>
                   ))}
                 </select>
@@ -173,7 +175,7 @@ export default function WorkspaceQrPage() {
                   <div className="flex justify-between items-start mb-4 relative z-10">
                     <div>
                       <p className="text-[10px] uppercase font-black tracking-widest text-slate-500">
-                        {floors.find(f => f.id === ws.floor_id)?.name || "Unknown Level"}
+                        {floors.find(f => f.id === ws.floor_id)?.name || t("qr.unknownLevel")}
                       </p>
                       <h4 className="text-xl font-bold text-white group-hover:text-primary-400 transition-colors">{ws.name}</h4>
                     </div>
@@ -184,7 +186,7 @@ export default function WorkspaceQrPage() {
                   </div>
                   <div className="flex items-center gap-2 text-xs font-bold text-slate-500 relative z-10">
                     <QrCode size={14} />
-                    <span className="font-mono">VAL: {ws.qr_code_value}</span>
+                    <span className="font-mono">{t("qr.valuePrefix")}: {ws.qr_code_value}</span>
                   </div>
                   {selectedId === ws.id && (
                     <motion.div layoutId="active-bg" className="absolute inset-0 bg-gradient-to-br from-primary-500/5 to-transparent pointer-events-none" />
@@ -206,7 +208,7 @@ export default function WorkspaceQrPage() {
                 >
                   <Card className="glass-panel border-white/10 overflow-hidden shadow-2xl">
                     <CardHeader className="bg-white/5 border-b border-white/5 text-center">
-                      <CardTitle className="text-2xl font-black">Label Preview</CardTitle>
+                      <CardTitle className="text-2xl font-black">{t("qr.labelPreview")}</CardTitle>
                     </CardHeader>
                     <CardContent className="p-10 flex flex-col items-center">
                       <div className="relative group perspective-1000">
@@ -217,7 +219,7 @@ export default function WorkspaceQrPage() {
                           className="relative w-64 h-80 bg-white rounded-[2.5rem] p-8 shadow-[0_40px_100px_rgba(0,0,0,0.4)] flex flex-col items-center justify-between border-[6px] border-slate-900"
                         >
                           <div className="text-center">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">Office Hub</p>
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mb-1">{t("qr.officeHub")}</p>
                             <div className="h-1 w-12 bg-primary-600 mx-auto rounded-full" />
                           </div>
                           
@@ -231,7 +233,7 @@ export default function WorkspaceQrPage() {
 
                           <div className="text-center">
                             <h3 className="text-2xl font-black text-slate-900 leading-none">{selectedWorkspace.name}</h3>
-                            <p className="text-[8px] text-slate-400 mt-2 uppercase font-black tracking-widest">Scan to Check-in</p>
+                            <p className="text-[8px] text-slate-400 mt-2 uppercase font-black tracking-widest">{t("qr.scanToCheckIn")}</p>
                           </div>
                         </motion.div>
                       </div>
@@ -239,11 +241,11 @@ export default function WorkspaceQrPage() {
                       <div className="mt-12 grid grid-cols-2 gap-4 w-full">
                         <Button onClick={handleDownload} variant="outline" className="h-14 rounded-2xl border-white/10 hover:bg-white/10 gap-3 font-bold">
                           <Download size={20} />
-                          Export
+                          {t("qr.export")}
                         </Button>
                         <Button onClick={handleCopy} variant="outline" className="h-14 rounded-2xl border-white/10 hover:bg-white/10 gap-3 font-bold">
                           {copySuccess ? <CheckCircle2 className="text-emerald-500" size={20} /> : <Copy size={20} />}
-                          {copySuccess ? "Copied" : "Copy"}
+                          {copySuccess ? t("qr.copied") : t("qr.copy")}
                         </Button>
                       </div>
                     </CardContent>
@@ -255,9 +257,9 @@ export default function WorkspaceQrPage() {
                         <Info size={24} />
                       </div>
                       <div className="space-y-1">
-                        <h4 className="font-bold text-white text-sm">Deployment Guide</h4>
+                        <h4 className="font-bold text-white text-sm">{t("qr.deploymentGuide")}</h4>
                         <p className="text-xs text-slate-400 leading-relaxed font-medium">
-                          Print this label at 300 DPI for optimal scanning. Ensure the surface is non-reflective for mobile sensors.
+                          {t("qr.deploymentDescription")}
                         </p>
                       </div>
                     </div>
@@ -268,7 +270,7 @@ export default function WorkspaceQrPage() {
                   <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center">
                     <QrCode size={32} className="opacity-20" />
                   </div>
-                  <p className="font-bold">Select a workspace to preview label</p>
+                  <p className="font-bold">{t("qr.empty")}</p>
                 </div>
               )}
             </AnimatePresence>

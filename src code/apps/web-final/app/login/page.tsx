@@ -8,6 +8,9 @@ import { supabase } from "@/lib/supabase/client"
 import { getSafeRedirectTo } from "@/lib/auth-redirect"
 import { Button } from "@/components/premium/ui/button"
 import { Input } from "@/components/premium/ui/input"
+import { LanguageToggle } from "@/components/premium/ui/language-toggle"
+import { ModeToggle } from "@/components/premium/ui/mode-toggle"
+import { useLanguage } from "@/components/premium/language-provider"
 
 type AuthMode = "sign-in" | "sign-up"
 
@@ -22,6 +25,7 @@ export default function LoginPage() {
 function LoginPageContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { t } = useLanguage()
   const redirectTo = getSafeRedirectTo(searchParams.get("redirectTo"))
   
   const [mode, setMode] = React.useState<AuthMode>("sign-in")
@@ -51,7 +55,7 @@ function LoginPageContent() {
           return
         }
 
-        setSuccess("Signed in successfully. Redirecting...")
+        setSuccess(t("login.signedIn"))
         setTimeout(() => {
           router.push(redirectTo)
           router.refresh()
@@ -74,18 +78,18 @@ function LoginPageContent() {
         }
 
         if (data.session) {
-          setSuccess("Account created and signed in. Redirecting...")
+          setSuccess(t("login.createdSignedIn"))
           setTimeout(() => {
             router.push(redirectTo)
             router.refresh()
           }, 1000)
         } else {
-          setSuccess("Account created! Please check your email for confirmation.")
+          setSuccess(t("login.createdConfirm"))
           setIsSubmitting(false)
         }
       }
     } catch {
-      setError("An unexpected error occurred.")
+      setError(t("login.unexpectedError"))
       setIsSubmitting(false)
     }
   }
@@ -98,6 +102,12 @@ function LoginPageContent() {
 
   return (
     <div className="min-h-screen bg-[#0B0E14] flex items-center justify-center p-6 font-inter overflow-hidden relative">
+      <div className="absolute right-6 top-6 z-20">
+        <div className="flex items-center gap-2">
+          <LanguageToggle />
+          <ModeToggle />
+        </div>
+      </div>
       {/* Background Orbs */}
       <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-primary-900/10 rounded-full blur-[120px]" />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/10 rounded-full blur-[120px]" />
@@ -115,19 +125,19 @@ function LoginPageContent() {
             </div>
             <div className="space-y-2">
               <h1 className="text-6xl font-black text-white tracking-tight leading-none">
-                Workspace <br/>
-                <span className="text-gradient">Executive</span>
+                {t("login.brandTitle")} <br/>
+                <span className="text-gradient">{t("login.brandAccent")}</span>
               </h1>
               <p className="text-lg text-slate-400 max-w-sm leading-relaxed">
-                Management for the modern executive. Clean, efficient, and exceptionally powerful.
+                {t("login.brandDescription")}
               </p>
             </div>
           </div>
 
           <div className="space-y-4 pt-4">
-            <FeatureItem icon={<CheckCircle2 className="text-emerald-500" size={18} />} text="One-click workspace reservations" />
-            <FeatureItem icon={<CheckCircle2 className="text-emerald-500" size={18} />} text="Real-time occupancy monitoring" />
-            <FeatureItem icon={<CheckCircle2 className="text-emerald-500" size={18} />} text="Enterprise-grade security standards" />
+            <FeatureItem icon={<CheckCircle2 className="text-emerald-500" size={18} />} text={t("login.features.reservations")} />
+            <FeatureItem icon={<CheckCircle2 className="text-emerald-500" size={18} />} text={t("login.features.occupancy")} />
+            <FeatureItem icon={<CheckCircle2 className="text-emerald-500" size={18} />} text={t("login.features.security")} />
           </div>
         </motion.div>
 
@@ -142,12 +152,12 @@ function LoginPageContent() {
             
             <div className="mb-10 flex flex-col items-center">
               <h2 className="text-3xl font-bold text-white tracking-tight">
-                {mode === "sign-in" ? "Welcome Back" : "Create Account"}
+                {mode === "sign-in" ? t("login.welcomeBack") : t("login.createAccount")}
               </h2>
               <p className="text-slate-500 mt-2 text-center text-sm">
                 {mode === "sign-in" 
-                  ? "Enter your credentials to access your secure workspace." 
-                  : "Join our premium network and start booking smarter."}
+                  ? t("login.signInDescription")
+                  : t("login.signUpDescription")}
               </p>
             </div>
 
@@ -161,7 +171,7 @@ function LoginPageContent() {
                     exit={{ opacity: 0, height: 0 }}
                     className="space-y-2"
                   >
-                    <label className="text-sm font-medium text-slate-400 ml-1">Full Name</label>
+                    <label className="text-sm font-medium text-slate-400 ml-1">{t("login.fullName")}</label>
                     <div className="relative group">
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={20} />
                       <Input 
@@ -177,7 +187,7 @@ function LoginPageContent() {
               </AnimatePresence>
 
               <div className="space-y-2">
-                <label className="text-sm font-medium text-slate-400 ml-1">Email Address</label>
+                <label className="text-sm font-medium text-slate-400 ml-1">{t("login.email")}</label>
                 <div className="relative group">
                   <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={20} />
                   <Input 
@@ -194,7 +204,7 @@ function LoginPageContent() {
 
               <div className="space-y-2">
                 <div className="flex justify-between items-center px-1">
-                  <label className="text-sm font-medium text-slate-400">Password</label>
+                  <label className="text-sm font-medium text-slate-400">{t("login.password")}</label>
                 </div>
                 <div className="relative group">
                   <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={20} />
@@ -244,11 +254,11 @@ function LoginPageContent() {
                 {isSubmitting ? (
                   <div className="flex items-center gap-2">
                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    Processing...
+                    {t("login.processing")}
                   </div>
                 ) : (
                   <div className="flex items-center justify-center gap-2">
-                    {mode === "sign-in" ? "Sign In" : "Register Now"}
+                    {mode === "sign-in" ? t("login.signIn") : t("login.registerNow")}
                     <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
                   </div>
                 )}
@@ -258,7 +268,7 @@ function LoginPageContent() {
             <div className="mt-8 text-center space-y-4">
               <div className="relative">
                 <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-white/5"></div></div>
-                <div className="relative flex justify-center text-xs"><span className="bg-[#12161D] px-4 text-slate-500 font-bold uppercase tracking-widest">Account Options</span></div>
+                <div className="relative flex justify-center text-xs"><span className="bg-[#12161D] px-4 text-slate-500 font-bold uppercase tracking-widest">{t("login.accountOptions")}</span></div>
               </div>
               
               <button 
@@ -268,12 +278,12 @@ function LoginPageContent() {
                 {mode === "sign-in" ? (
                   <>
                     <UserPlus size={18} />
-                    Don&apos;t have an account? Register here
+                    {t("login.registerPrompt")}
                   </>
                 ) : (
                   <>
                     <Shield size={18} />
-                    Already have an account? Sign in
+                    {t("login.signInPrompt")}
                   </>
                 )}
               </button>

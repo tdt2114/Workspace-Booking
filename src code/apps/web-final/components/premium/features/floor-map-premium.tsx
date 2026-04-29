@@ -9,6 +9,7 @@ import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { Button } from "@/components/premium/ui/button"
 import { Card } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useLanguage } from "@/components/premium/language-provider"
 import { cn } from "@/lib/utils"
 
 // --- Types ---
@@ -57,11 +58,11 @@ interface BookingResponse {
   message?: string
 }
 
-const statusStyleMap: Record<FloorMapStatus, { fill: string; stroke: string; label: string; glow: string }> = {
-  available: { fill: "rgba(16, 185, 129, 0.1)", stroke: "rgba(16, 185, 129, 0.5)", label: "Available", glow: "rgba(16, 185, 129, 0.2)" },
-  maintenance: { fill: "rgba(245, 158, 11, 0.1)", stroke: "rgba(245, 158, 11, 0.5)", label: "Maintenance", glow: "rgba(245, 158, 11, 0.2)" },
-  inactive: { fill: "rgba(100, 116, 139, 0.1)", stroke: "rgba(100, 116, 139, 0.5)", label: "Inactive", glow: "transparent" },
-  reserved: { fill: "rgba(239, 68, 68, 0.1)", stroke: "rgba(239, 68, 68, 0.5)", label: "Occupied", glow: "rgba(239, 68, 68, 0.2)" },
+const statusStyleMap: Record<FloorMapStatus, { fill: string; stroke: string; glow: string }> = {
+  available: { fill: "rgba(16, 185, 129, 0.1)", stroke: "rgba(16, 185, 129, 0.5)", glow: "rgba(16, 185, 129, 0.2)" },
+  maintenance: { fill: "rgba(245, 158, 11, 0.1)", stroke: "rgba(245, 158, 11, 0.5)", glow: "rgba(245, 158, 11, 0.2)" },
+  inactive: { fill: "rgba(100, 116, 139, 0.1)", stroke: "rgba(100, 116, 139, 0.5)", glow: "transparent" },
+  reserved: { fill: "rgba(239, 68, 68, 0.1)", stroke: "rgba(239, 68, 68, 0.5)", glow: "rgba(239, 68, 68, 0.2)" },
 }
 
 // --- Utils ---
@@ -83,6 +84,7 @@ function buildDefaultTimeWindow() {
 }
 
 export function FloorMapPremium() {
+  const { t } = useLanguage()
   const [session, setSession] = React.useState<Session | null>(null)
   const [floors, setFloors] = React.useState<FloorRecord[]>([])
   const [workspaces, setWorkspaces] = React.useState<WorkspaceRecord[]>([])
@@ -268,14 +270,14 @@ export function FloorMapPremium() {
 
         const data = await res.json() as BookingResponse
         if (res.ok) {
-          setSuccess("Workspace reserved successfully!")
+          setSuccess(t("floorMap.reservedSuccess"))
           void fetchFloorState()
           setTimeout(() => setSelectedWorkspaceId(null), 2000)
         } else {
-          setError(data.message || "Failed to create booking.")
+          setError(data.message || t("floorMap.createFailed"))
         }
     } catch {
-      setError("An unexpected error occurred.")
+      setError(t("floorMap.unexpectedError"))
     } finally {
       setBookingLoading(false)
     }
@@ -301,7 +303,7 @@ export function FloorMapPremium() {
           >
             {floors.map(f => (
               <option key={f.id} value={f.id} className="bg-slate-900 text-white">
-                {f.name || `Floor ${f.floor_number}`}
+                {f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}
               </option>
             ))}
           </select>
@@ -317,7 +319,7 @@ export function FloorMapPremium() {
               value={viewStart}
               onChange={(e) => setViewStart(e.target.value)}
             />
-            <span className="text-slate-600 text-xs uppercase tracking-[0.2em]">to</span>
+            <span className="text-slate-600 text-xs uppercase tracking-[0.2em]">{t("floorMap.to")}</span>
             <input 
               data-testid="floor-map-view-end"
               type="datetime-local" 
@@ -331,8 +333,8 @@ export function FloorMapPremium() {
         <div className="hidden flex-1 lg:block" />
 
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge color="bg-emerald-500" label="Available" />
-          <StatusBadge color="bg-red-500" label="Occupied" />
+          <StatusBadge color="bg-emerald-500" label={t("floorMap.available")} />
+          <StatusBadge color="bg-red-500" label={t("floorMap.occupied")} />
         </div>
       </div>
 
@@ -355,7 +357,7 @@ export function FloorMapPremium() {
           ) : (
             <div className="text-center space-y-4 opacity-20">
               <MapIcon size={80} className="mx-auto text-primary-500" />
-              <p className="text-xl font-bold">Select a floor to view map</p>
+              <p className="text-xl font-bold">{t("floorMap.selectFloor")}</p>
             </div>
           )}
 
@@ -379,7 +381,7 @@ export function FloorMapPremium() {
             >
               <Card className="flex flex-col overflow-hidden border-white/10 glass-panel lg:h-full">
                 <div className="flex items-center justify-between border-b border-white/5 bg-primary-500/5 p-5 sm:p-6">
-                  <h3 className="text-xl font-bold text-white">Booking Details</h3>
+                  <h3 className="text-xl font-bold text-white">{t("floorMap.bookingDetails")}</h3>
                   <Button variant="ghost" size="icon" onClick={() => setSelectedWorkspaceId(null)} className="text-slate-500 hover:text-white">
                     <ChevronRight />
                   </Button>
@@ -392,7 +394,7 @@ export function FloorMapPremium() {
                     </div>
                     <div>
                       <h4 data-testid="floor-map-selected-workspace-name" className="text-2xl font-black text-white break-words">{selectedWorkspace?.name}</h4>
-                      <p className="text-slate-400 text-sm font-medium">{selectedFloor?.name || `Floor ${selectedFloor?.floor_number}`}</p>
+                      <p className="text-slate-400 text-sm font-medium">{selectedFloor?.name || t("common.floorFallback").replace("{number}", String(selectedFloor?.floor_number ?? ""))}</p>
                       {selectedWorkspace?.qr_code_value ? (
                         <p data-testid="floor-map-selected-workspace-qr" className="mt-2 break-all text-xs font-mono text-slate-500">
                           {selectedWorkspace.qr_code_value}
@@ -403,7 +405,7 @@ export function FloorMapPremium() {
 
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">Start Time</label>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">{t("floorMap.startTime")}</label>
                       <div className="relative group">
                         <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500" size={18} />
                         <Input 
@@ -417,7 +419,7 @@ export function FloorMapPremium() {
                     </div>
 
                     <div className="space-y-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">End Time</label>
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">{t("floorMap.endTime")}</label>
                       <div className="relative group">
                         <Clock className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500" size={18} />
                         <Input 
@@ -452,7 +454,7 @@ export function FloorMapPremium() {
                     onClick={handleBooking}
                     disabled={bookingLoading}
                   >
-                    {bookingLoading ? "Processing..." : "Confirm Booking"}
+                    {bookingLoading ? t("floorMap.processing") : t("floorMap.confirmBooking")}
                   </Button>
                 </div>
               </Card>

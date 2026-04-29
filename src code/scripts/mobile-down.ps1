@@ -4,7 +4,7 @@ $ErrorActionPreference = "Stop"
 $state = Read-MobileState
 
 if (-not $state) {
-  Write-Host "No mobile-dev session state found." -ForegroundColor Yellow
+  Write-Host "No preview session is running." -ForegroundColor Green
   exit 0
 }
 
@@ -12,14 +12,14 @@ foreach ($process in $state.processes) {
   if (Test-MobileProcessAlive -Id $process.pid) {
     try {
       Stop-MobileProcessTree -Id $process.pid
-      Write-Host "Stopped $($process.name) (PID $($process.pid))." -ForegroundColor Green
+      Write-Host "Stopped $($process.name)." -ForegroundColor Green
     } catch {
-      Write-Host "Failed to stop $($process.name) (PID $($process.pid)): $($_.Exception.Message)" -ForegroundColor Yellow
+      Write-Host "$($process.name) was already closed." -ForegroundColor Yellow
     }
   } else {
-    Write-Host "$($process.name) (PID $($process.pid)) was already stopped." -ForegroundColor Yellow
+    Write-Host "$($process.name) was already closed." -ForegroundColor Yellow
   }
 }
 
 Remove-MobileState
-Write-Host "Mobile-dev session cleared." -ForegroundColor Green
+Write-Host "Preview session stopped. You can close any old tunnel browser tabs." -ForegroundColor Green

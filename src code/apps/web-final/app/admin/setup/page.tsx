@@ -11,6 +11,7 @@ import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useLanguage } from "@/components/premium/language-provider"
 import { cn } from "@/lib/utils"
 
 // --- Types ---
@@ -79,6 +80,7 @@ interface SvgMapperProps {
 // --- Main Component ---
 export default function AdminSetupPage() {
   const router = useRouter()
+  const { t } = useLanguage()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<Tab>("buildings")
@@ -111,11 +113,11 @@ export default function AdminSetupPage() {
         setWorkspaces(w.items || [])
       }
     } catch {
-      setError("Failed to load system data.")
+      setError(t("admin.loadFailed"))
     } finally {
       setLoading(false)
     }
-  }, [apiBaseUrl])
+  }, [apiBaseUrl, t])
 
   // Auth & Initial Data
   React.useEffect(() => {
@@ -138,14 +140,14 @@ export default function AdminSetupPage() {
       <div className="space-y-8">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">System Configuration</h1>
-            <p className="text-slate-400 font-medium">Architect your workspace environment with precision.</p>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">{t("admin.title")}</h1>
+            <p className="text-slate-400 font-medium">{t("admin.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2 glass p-1.5 rounded-2xl border-white/5 overflow-x-auto no-scrollbar">
-            <TabButton active={activeTab === "buildings"} onClick={() => setActiveTab("buildings")} icon={<Building2 size={16} />} label="Buildings" />
-            <TabButton active={activeTab === "floors"} onClick={() => setActiveTab("floors")} icon={<Layers size={16} />} label="Floors" />
-            <TabButton active={activeTab === "workspaces"} onClick={() => setActiveTab("workspaces")} icon={<MapPin size={16} />} label="Workspaces" />
-            <TabButton active={activeTab === "svg-mapping"} onClick={() => setActiveTab("svg-mapping")} icon={<Upload size={16} />} label="SVG Mapping" />
+            <TabButton active={activeTab === "buildings"} onClick={() => setActiveTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />
+            <TabButton active={activeTab === "floors"} onClick={() => setActiveTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />
+            <TabButton active={activeTab === "workspaces"} onClick={() => setActiveTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
+            <TabButton active={activeTab === "svg-mapping"} onClick={() => setActiveTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />
           </div>
         </div>
 
@@ -193,6 +195,7 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
 // --- Specialized Managers ---
 
 function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingManagerProps) {
+  const { t } = useLanguage()
   const [isSaving, setIsSaving] = React.useState(false)
   const [form, setForm] = React.useState({ name: "", address: "", total_floors: 1 })
 
@@ -216,8 +219,8 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <Card className="lg:col-span-2 glass-panel border-white/5">
         <CardHeader>
-          <CardTitle>Active Facilities</CardTitle>
-          <CardDescription>Comprehensive list of managed buildings.</CardDescription>
+          <CardTitle>{t("admin.activeFacilities")}</CardTitle>
+          <CardDescription>{t("admin.activeFacilitiesDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {buildings.map((b: Building) => (
@@ -228,12 +231,12 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
                 </div>
                 <div>
                   <h4 className="font-bold text-lg text-white">{b.name}</h4>
-                  <p className="text-sm text-slate-500">{b.address || "No address provided"}</p>
+                  <p className="text-sm text-slate-500">{b.address || t("admin.noAddress")}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
                 <div className="text-right mr-4">
-                  <p className="text-xs font-bold text-slate-500 uppercase">Floors</p>
+                  <p className="text-xs font-bold text-slate-500 uppercase">{t("admin.floorsLabel")}</p>
                   <p className="text-white font-black">{b.total_floors}</p>
                 </div>
                 <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white"><Plus size={20} /></Button>
@@ -246,24 +249,24 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
 
       <Card className="glass-panel border-white/5 h-fit sticky top-8">
         <CardHeader>
-          <CardTitle>Add Facility</CardTitle>
-          <CardDescription>Register a new building to the network.</CardDescription>
+          <CardTitle>{t("admin.addFacility")}</CardTitle>
+          <CardDescription>{t("admin.addFacilityDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Building Name</label>
-            <Input placeholder="e.g. Executive Center" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.buildingName")}</label>
+            <Input placeholder={t("admin.buildingPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Address</label>
-            <Input placeholder="Street address, City" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.address")}</label>
+            <Input placeholder={t("admin.addressPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Total Floors</label>
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.totalFloors")}</label>
             <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.total_floors} onChange={e => setForm({...form, total_floors: parseInt(e.target.value)})} />
           </div>
           <Button className="w-full mt-4 bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20" onClick={handleCreate} disabled={isSaving}>
-            {isSaving ? "Saving..." : <><Save className="mr-2" size={20} /> Create Building</>}
+            {isSaving ? t("admin.saving") : <><Save className="mr-2" size={20} /> {t("admin.createBuilding")}</>}
           </Button>
         </CardContent>
       </Card>
@@ -272,12 +275,14 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
 }
 
 function FloorManager({ floors, buildings }: FloorManagerProps) {
+  const { t } = useLanguage()
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <Card className="lg:col-span-2 glass-panel border-white/5">
         <CardHeader>
-          <CardTitle>Level Management</CardTitle>
-          <CardDescription>Configure floor plans and levels.</CardDescription>
+          <CardTitle>{t("admin.levelManagement")}</CardTitle>
+          <CardDescription>{t("admin.levelManagementDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {floors.map((f: Floor) => (
@@ -287,13 +292,13 @@ function FloorManager({ floors, buildings }: FloorManagerProps) {
                   <Layers size={28} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg text-white">{f.name || `Floor ${f.floor_number}`}</h4>
+                  <h4 className="font-bold text-lg text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</h4>
                   <p className="text-sm text-slate-500">{buildings.find((b) => b.id === f.building_id)?.name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", f.svg_map_url ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border border-amber-500/20")}>
-                  {f.svg_map_url ? "SVG Mapped" : "No SVG"}
+                  {f.svg_map_url ? t("admin.svgMapped") : t("admin.noSvg")}
                 </div>
                 <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white"><ChevronRight size={20} /></Button>
               </div>
@@ -304,12 +309,12 @@ function FloorManager({ floors, buildings }: FloorManagerProps) {
       
       <Card className="glass-panel border-white/5 h-fit">
         <CardHeader>
-          <CardTitle>Quick Add Floor</CardTitle>
-          <CardDescription>Add a floor to an existing building.</CardDescription>
+          <CardTitle>{t("admin.quickAddFloor")}</CardTitle>
+          <CardDescription>{t("admin.quickAddFloorDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-           <p className="text-sm text-slate-400 text-center py-8">Select a building first to enable floor creation.</p>
-           <Button className="w-full bg-white/5 border border-white/10 text-slate-500 font-bold" disabled>Create Floor</Button>
+           <p className="text-sm text-slate-400 text-center py-8">{t("admin.selectBuildingFirst")}</p>
+           <Button className="w-full bg-white/5 border border-white/10 text-slate-500 font-bold" disabled>{t("admin.createFloor")}</Button>
         </CardContent>
       </Card>
     </div>
@@ -317,6 +322,8 @@ function FloorManager({ floors, buildings }: FloorManagerProps) {
 }
 
 function WorkspaceManager({ workspaces }: WorkspaceManagerProps) {
+  const { t } = useLanguage()
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -332,19 +339,19 @@ function WorkspaceManager({ workspaces }: WorkspaceManagerProps) {
                    </div>
                    <div>
                       <h4 className="font-bold text-white text-lg">{w.name}</h4>
-                      <p className="text-xs text-slate-500">{w.type.toUpperCase()} • Capacity: {w.capacity}</p>
+                      <p className="text-xs text-slate-500">{w.type.toUpperCase()} • {t("admin.capacity")}: {w.capacity}</p>
                    </div>
                 </div>
                 <div className="flex items-center justify-between mt-6">
-                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">SVG ID: {w.svg_element_id}</span>
-                   <Button variant="ghost" size="sm" className="text-primary-500 font-bold hover:bg-primary-500/10">Edit</Button>
+                   <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.svgId")}: {w.svg_element_id}</span>
+                   <Button variant="ghost" size="sm" className="text-primary-500 font-bold hover:bg-primary-500/10">{t("admin.edit")}</Button>
                 </div>
              </CardContent>
           </Card>
         ))}
         <button className="border-2 border-dashed border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-white/5 hover:border-primary-500/50 transition-all group h-full min-h-[160px]">
            <Plus size={32} className="mb-2 group-hover:scale-110 transition-transform" />
-           <span className="font-bold">New Workspace</span>
+           <span className="font-bold">{t("admin.newWorkspace")}</span>
         </button>
       </div>
     </div>
@@ -352,6 +359,7 @@ function WorkspaceManager({ workspaces }: WorkspaceManagerProps) {
 }
 
 function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
+  const { t } = useLanguage()
   const [selectedFloorId, setSelectedFloorId] = React.useState("")
   const [file, setFile] = React.useState<File | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
@@ -367,7 +375,7 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
-      if (res.ok) alert("SVG uploaded successfully!")
+      if (res.ok) alert(t("admin.svgUploaded"))
     } finally { setIsUploading(false) }
   }
 
@@ -375,8 +383,8 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
       <Card className="lg:col-span-3 glass-panel border-white/5 flex flex-col min-h-[600px]">
         <CardHeader className="bg-white/5">
-          <CardTitle>Floor Mapping Visualizer</CardTitle>
-          <CardDescription>Link SVG elements to workspace records visually.</CardDescription>
+          <CardTitle>{t("admin.floorMappingVisualizer")}</CardTitle>
+          <CardDescription>{t("admin.floorMappingDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="flex-1 flex items-center justify-center p-12">
           <div className="text-center space-y-6">
@@ -384,8 +392,8 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
               <FileCode size={48} />
             </div>
             <div className="space-y-2">
-              <h4 className="text-xl font-bold text-white">Interactive Mapping Console</h4>
-              <p className="text-slate-500 max-w-md">Select a floor to begin the synchronization process between SVG assets and the database.</p>
+              <h4 className="text-xl font-bold text-white">{t("admin.mappingConsole")}</h4>
+              <p className="text-slate-500 max-w-md">{t("admin.mappingConsoleDesc")}</p>
             </div>
           </div>
         </CardContent>
@@ -394,28 +402,28 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
       <div className="space-y-6">
         <Card className="glass-panel border-white/5">
           <CardHeader>
-            <CardTitle>Upload Assets</CardTitle>
+            <CardTitle>{t("admin.uploadAssets")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
              <div className="space-y-2">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Target Floor</label>
+               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.targetFloor")}</label>
                <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none" onChange={e => setSelectedFloorId(e.target.value)} value={selectedFloorId}>
-                  <option value="">Select Floor</option>
+                  <option value="">{t("admin.selectFloor")}</option>
                   {floors.map((f) => (
-                    <option key={f.id} value={f.id} className="bg-slate-900 text-white">{f.name || `Floor ${f.floor_number}`}</option>
+                    <option key={f.id} value={f.id} className="bg-slate-900 text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</option>
                   ))}
                </select>
              </div>
              <div className="space-y-2">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">SVG Source</label>
+               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.svgSource")}</label>
                <div className="relative h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center hover:bg-white/5 transition-all cursor-pointer">
                   <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".svg" onChange={e => setFile(e.target.files?.[0] || null)} />
                   <Upload size={32} className="text-slate-500 mb-2" />
-                  <p className="text-xs text-slate-500 font-bold">{file ? file.name : "Choose SVG file"}</p>
+                  <p className="text-xs text-slate-500 font-bold">{file ? file.name : t("admin.chooseSvg")}</p>
                </div>
              </div>
              <Button className="w-full mt-4 bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleUpload} disabled={isUploading || !file}>
-               {isUploading ? "Uploading..." : "Sync Assets"}
+               {isUploading ? t("admin.uploading") : t("admin.syncAssets")}
              </Button>
           </CardContent>
         </Card>
@@ -425,8 +433,8 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
             <div className="flex gap-4">
               <Info className="text-primary-500 shrink-0" size={24} />
               <div className="space-y-1">
-                <h4 className="font-bold text-white text-sm">System Tip</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">Ensure your SVG IDs match the Workspace IDs for automatic synchronization.</p>
+                <h4 className="font-bold text-white text-sm">{t("admin.systemTip")}</h4>
+                <p className="text-xs text-slate-400 leading-relaxed">{t("admin.systemTipDesc")}</p>
               </div>
             </div>
           </CardContent>

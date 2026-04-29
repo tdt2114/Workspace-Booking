@@ -24,6 +24,14 @@
   --color-status-selected: #F59E0B; /* Amber 500 */
 }
 
+html.light {
+  --color-background: #f6f8fb;
+  --color-foreground: #0f172a;
+  --color-surface: #ffffff;
+  --color-surface-hover: #eef3f8;
+  --color-border: #d8e0ea;
+}
+
 /* Glassmorphism Utilities */
 @utility glass {
   background: rgba(21, 26, 35, 0.7);
@@ -56,6 +64,115 @@ body {
     radial-gradient(circle at 15% 50%, rgba(37, 99, 235, 0.1), transparent 25%),
     radial-gradient(circle at 85% 30%, rgba(139, 92, 246, 0.1), transparent 25%);
   background-attachment: fixed;
+}
+
+html.light body {
+  background-color: #f6f8fb;
+  color: #0f172a;
+  background-image:
+    linear-gradient(180deg, rgba(37, 99, 235, 0.08), transparent 32%),
+    radial-gradient(circle at 84% 18%, rgba(16, 185, 129, 0.10), transparent 28%);
+}
+
+html.light .glass {
+  background: rgba(255, 255, 255, 0.78);
+  border-color: rgba(15, 23, 42, 0.10);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
+html.light .glass-panel {
+  background: linear-gradient(145deg, rgba(255, 255, 255, 0.88) 0%, rgba(239, 244, 249, 0.84) 100%);
+  border-color: rgba(15, 23, 42, 0.10);
+  box-shadow: 0 12px 34px rgba(15, 23, 42, 0.10);
+}
+
+html.light .bg-\[\#07090D\],
+html.light .bg-\[\#0B0E14\] {
+  background-color: #f6f8fb;
+}
+
+html.light .bg-\[\#111722\]\/95,
+html.light .bg-\[\#12161D\],
+html.light .bg-slate-900\/80,
+html.light .bg-slate-950\/80 {
+  background-color: rgba(255, 255, 255, 0.92);
+}
+
+html.light main .text-white,
+html.light .glass .text-white,
+html.light .glass-panel .text-white,
+html.light .bg-\[\#07090D\] .text-white,
+html.light .bg-\[\#0B0E14\] .text-white,
+html.light .bg-slate-900\/80 .text-white {
+  color: #0f172a;
+}
+
+html.light .bg-primary-500.text-white,
+html.light .bg-primary-600.text-white,
+html.light .bg-blue-500.text-white,
+html.light .bg-blue-600.text-white,
+html.light .bg-emerald-500.text-white,
+html.light .bg-emerald-600.text-white,
+html.light .bg-red-500.text-white,
+html.light .bg-red-600.text-white,
+html.light .bg-primary-500 .text-white,
+html.light .bg-primary-600 .text-white,
+html.light .bg-blue-500 .text-white,
+html.light .bg-blue-600 .text-white,
+html.light .bg-emerald-500 .text-white,
+html.light .bg-emerald-600 .text-white,
+html.light .bg-red-500 .text-white,
+html.light .bg-red-600 .text-white {
+  color: #ffffff;
+}
+
+html.light .text-slate-300 {
+  color: #334155;
+}
+
+html.light .text-slate-400 {
+  color: #475569;
+}
+
+html.light .text-slate-500 {
+  color: #64748b;
+}
+
+html.light .text-slate-600 {
+  color: #64748b;
+}
+
+html.light .text-slate-800 {
+  color: #94a3b8;
+}
+
+html.light .border-white\/5,
+html.light .border-white\/10,
+html.light .border-white\/20 {
+  border-color: rgba(15, 23, 42, 0.10);
+}
+
+html.light .bg-white\/5,
+html.light .hover\:bg-white\/5:hover {
+  background-color: rgba(15, 23, 42, 0.04);
+}
+
+html.light .bg-white\/10,
+html.light .hover\:bg-white\/10:hover,
+html.light .hover\:bg-white\/20:hover {
+  background-color: rgba(15, 23, 42, 0.08);
+}
+
+html.light input,
+html.light select,
+html.light textarea {
+  color: #0f172a;
+  color-scheme: light;
+}
+
+html.light option {
+  background-color: #ffffff;
+  color: #0f172a;
 }
 
 html {

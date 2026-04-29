@@ -8,6 +8,7 @@ import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { cn } from "@/lib/utils"
@@ -47,6 +48,7 @@ interface BookingItemProps {
 }
 
 export default function BookingsPage() {
+  const { t } = useLanguage()
   const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<"my" | "system">("my")
   const [bookings, setBookings] = React.useState<Booking[]>([])
@@ -142,8 +144,8 @@ export default function BookingsPage() {
       <div className="space-y-8" data-testid="bookings-page">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">Booking Operations</h1>
-            <p className="text-slate-400 font-medium">Lifecycle management for all workspace reservations.</p>
+            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">{t("bookings.title")}</h1>
+            <p className="text-slate-400 font-medium">{t("bookings.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2 glass p-1.5 rounded-2xl border-white/5">
             <button 
@@ -155,7 +157,7 @@ export default function BookingsPage() {
               )}
             >
               <History size={18} />
-              My History
+              {t("bookings.myHistory")}
             </button>
             {isAdmin && (
               <button 
@@ -167,17 +169,17 @@ export default function BookingsPage() {
                 )}
               >
                 <ShieldCheck size={18} />
-                Global Access
+                {t("bookings.globalAccess")}
               </button>
             )}
           </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          <StatCard label="Total Vol" value={stats.total} icon={<Calendar className="text-blue-500" size={20} />} />
-          <StatCard label="Live/Conf" value={stats.confirmed} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
-          <StatCard label="Finalized" value={stats.completed} icon={<History className="text-slate-400" size={20} />} />
-          <StatCard label="Terminated" value={stats.cancelled} icon={<XCircle className="text-rose-500" size={20} />} />
+          <StatCard label={t("bookings.stats.total")} value={stats.total} icon={<Calendar className="text-blue-500" size={20} />} />
+          <StatCard label={t("bookings.stats.live")} value={stats.confirmed} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
+          <StatCard label={t("bookings.stats.finalized")} value={stats.completed} icon={<History className="text-slate-400" size={20} />} />
+          <StatCard label={t("bookings.stats.terminated")} value={stats.cancelled} icon={<XCircle className="text-rose-500" size={20} />} />
         </div>
 
         <AnimatePresence mode="wait">
@@ -191,14 +193,14 @@ export default function BookingsPage() {
             <Card className="lg:col-span-2 glass-panel border-white/10 flex flex-col h-fit">
               <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle>{activeTab === "my" ? "Your Reservations" : "System Records"}</CardTitle>
-                  <CardDescription>Filtering through {displayedBookings.length} records.</CardDescription>
+                  <CardTitle>{activeTab === "my" ? t("bookings.yourReservations") : t("bookings.systemRecords")}</CardTitle>
+                  <CardDescription>{t("bookings.filtering").replace("{count}", String(displayedBookings.length))}</CardDescription>
                 </div>
                 <div className="relative group">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={16} />
                   <Input 
                     data-testid="bookings-search"
-                    placeholder="Filter by name or email..." 
+                    placeholder={t("bookings.searchPlaceholder")}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     className="pl-9 h-10 w-full sm:w-64 bg-white/5 border-white/10 rounded-xl focus:border-primary-500" 
@@ -222,7 +224,7 @@ export default function BookingsPage() {
                 ) : (
                   <div className="py-20 text-center space-y-4 opacity-20">
                     <Calendar size={64} className="mx-auto" />
-                    <p className="font-bold">No records found matching your criteria.</p>
+                    <p className="font-bold">{t("bookings.empty")}</p>
                   </div>
                 )}
               </CardContent>
@@ -234,38 +236,38 @@ export default function BookingsPage() {
                   <CardHeader className="bg-primary-500/10">
                     <CardTitle className="text-lg flex items-center gap-2">
                       <Settings2 size={20} className="text-primary-500" />
-                      Maintenance Tools
+                      {t("bookings.maintenanceTools")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="p-6 space-y-6">
                     <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">No-Show Cleanup</span>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.noShowCleanup")}</span>
                         <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">Terminate all reservations that missed the check-in window.</p>
+                      <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.noShowDescription")}</p>
                       <Button 
                         data-testid="bookings-run-no-show"
                         onClick={() => handleAction('bulk', 'no-show')}
                         className="w-full bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/20 font-bold h-10 rounded-xl"
                       >
                         <Play size={14} className="mr-2" />
-                        Execute Cleanup
+                        {t("bookings.executeCleanup")}
                       </Button>
                     </div>
 
                     <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
                       <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Archive Job</span>
+                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.archiveJob")}</span>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">Automatically complete all past-due sessions to free resources.</p>
+                      <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.archiveDescription")}</p>
                       <Button 
                         data-testid="bookings-run-completed"
                         onClick={() => handleAction('bulk', 'complete')}
                         className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 font-bold h-10 rounded-xl"
                       >
                         <Play size={14} className="mr-2" />
-                        Archive Past Sessions
+                        {t("bookings.archivePastSessions")}
                       </Button>
                     </div>
                   </CardContent>
@@ -274,11 +276,11 @@ export default function BookingsPage() {
 
               <Card className="glass-panel border-white/5">
                 <CardHeader>
-                  <CardTitle className="text-lg">Quota Status</CardTitle>
+                  <CardTitle className="text-lg">{t("bookings.quotaStatus")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-between text-xs font-bold mb-1">
-                    <span className="text-slate-500">Active Bookings</span>
+                    <span className="text-slate-500">{t("bookings.activeBookings")}</span>
                     <span className="text-white">{stats.confirmed}/5</span>
                   </div>
                   <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
@@ -286,7 +288,7 @@ export default function BookingsPage() {
                   </div>
                   <div className="flex gap-3 pt-4 border-t border-white/5">
                     <Info size={16} className="text-slate-500 shrink-0" />
-                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium uppercase tracking-tight">You are allowed up to 5 concurrent active confirmed reservations.</p>
+                    <p className="text-[10px] text-slate-500 leading-relaxed font-medium uppercase tracking-tight">{t("bookings.quotaInfo")}</p>
                   </div>
                 </CardContent>
               </Card>
@@ -315,12 +317,14 @@ function StatCard({ label, value, icon }: StatCardProps) {
 }
 
 function BookingItem({ booking, onCancel, isActionLoading }: BookingItemProps) {
+  const { locale, t } = useLanguage()
+  const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const statusConfig: BookingStatusConfig = {
-    confirmed: { label: "Confirmed", className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
-    checked_in: { label: "Checked In", className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
-    completed: { label: "Completed", className: "bg-slate-500/10 text-slate-400 border-white/5" },
-    cancelled: { label: "Cancelled", className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
-    no_show: { label: "No Show", className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+    confirmed: { label: t("bookings.status.confirmed"), className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+    checked_in: { label: t("bookings.status.checkedIn"), className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+    completed: { label: t("bookings.status.completed"), className: "bg-slate-500/10 text-slate-400 border-white/5" },
+    cancelled: { label: t("bookings.status.cancelled"), className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
+    no_show: { label: t("bookings.status.noShow"), className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
   }
 
   const cfg = statusConfig[booking.status]
@@ -336,12 +340,12 @@ function BookingItem({ booking, onCancel, isActionLoading }: BookingItemProps) {
         </div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h4 className="text-lg font-bold text-white">{booking.workspace_name || "Workspace"}</h4>
+            <h4 className="text-lg font-bold text-white">{booking.workspace_name || t("bookings.workspaceFallback")}</h4>
             {booking.user_email && <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg font-bold">{booking.user_email}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
-            <span className="flex items-center gap-1.5"><MapPin size={14} className="text-primary-500" /> {booking.floor_name || "Level"}</span>
-            <span className="flex items-center gap-1.5"><Clock size={14} className="text-primary-500" /> {new Date(booking.start_time).toLocaleDateString()} {new Date(booking.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+            <span className="flex items-center gap-1.5"><MapPin size={14} className="text-primary-500" /> {booking.floor_name || t("bookings.levelFallback")}</span>
+            <span className="flex items-center gap-1.5"><Clock size={14} className="text-primary-500" /> {new Date(booking.start_time).toLocaleDateString(dateLocale)} {new Date(booking.start_time).toLocaleTimeString(dateLocale, {hour: '2-digit', minute:'2-digit'})}</span>
           </div>
         </div>
       </div>
@@ -359,7 +363,7 @@ function BookingItem({ booking, onCancel, isActionLoading }: BookingItemProps) {
               className="text-rose-500 hover:text-rose-400 hover:bg-rose-500/10 h-10 font-bold"
             >
               {isActionLoading ? <Loader2 size={16} className="animate-spin" /> : <XCircle size={18} className="mr-2" />}
-              Cancel
+              {t("bookings.cancel")}
             </Button>
           )}
           <Button variant="ghost" size="icon" className="text-slate-500 hover:text-white h-10 w-10">

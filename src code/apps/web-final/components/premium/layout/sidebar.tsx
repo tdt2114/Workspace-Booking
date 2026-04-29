@@ -7,12 +7,14 @@ import { motion } from "framer-motion"
 import { LayoutDashboard, Map, CalendarRange, QrCode, Settings, LogOut, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/premium/ui/button"
+import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 
 export function Sidebar() {
   const router = useRouter()
   const pathname = usePathname()
+  const { t } = useLanguage()
   const [isCollapsed, setIsCollapsed] = React.useState(false)
   const [role, setRole] = React.useState<string | null>(null)
 
@@ -40,11 +42,11 @@ export function Sidebar() {
   const isAdmin = role === 'admin' || role === 'manager'
 
   const menuItems = [
-    { icon: LayoutDashboard, label: "Dashboard", href: "/dashboard", show: true },
-    { icon: Map, label: "Floor Map", href: "/floor-map", show: true },
-    { icon: CalendarRange, label: "My Bookings", href: "/bookings", show: true },
-    { icon: QrCode, label: "QR Manager", href: "/workspace-qr", show: isAdmin },
-    { icon: Settings, label: "System Setup", href: "/admin/setup", show: isAdmin },
+    { icon: LayoutDashboard, label: t("legacy.dashboard"), href: "/dashboard", show: true },
+    { icon: Map, label: t("legacy.floorMap"), href: "/floor-map", show: true },
+    { icon: CalendarRange, label: t("legacy.myBookings"), href: "/bookings", show: true },
+    { icon: QrCode, label: t("legacy.qrManager"), href: "/workspace-qr", show: isAdmin },
+    { icon: Settings, label: t("legacy.systemSetup"), href: "/admin/setup", show: isAdmin },
   ]
 
   async function handleSignOut() {
@@ -109,10 +111,10 @@ export function Sidebar() {
 
       {isAdmin && !isCollapsed && (
         <div className="mx-6 mb-4 p-4 rounded-2xl bg-primary-500/5 border border-primary-500/10">
-          <p className="text-[10px] font-black text-primary-500 uppercase tracking-widest mb-1">Access Level</p>
+          <p className="text-[10px] font-black text-primary-500 uppercase tracking-widest mb-1">{t("legacy.accessLevel")}</p>
           <p className="text-xs font-bold text-white flex items-center gap-2">
             <ShieldCheck size={12} className="text-primary-500" />
-            Administrator
+            {t("legacy.administrator")}
           </p>
         </div>
       )}
@@ -127,7 +129,7 @@ export function Sidebar() {
           )}
         >
           <LogOut size={22} className="shrink-0" />
-          {!isCollapsed && <span className="font-bold text-sm">Sign Out</span>}
+          {!isCollapsed && <span className="font-bold text-sm">{t("legacy.signOut")}</span>}
         </Button>
       </div>
     </aside>

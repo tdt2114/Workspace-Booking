@@ -9,6 +9,9 @@ import type { Html5Qrcode } from "html5-qrcode"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { LanguageToggle } from "@/components/premium/ui/language-toggle"
+import { ModeToggle } from "@/components/premium/ui/mode-toggle"
+import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 
@@ -52,7 +55,9 @@ function findNextRelevantBooking(bookings: Booking[]) {
 
 export default function CheckInPage() {
   const router = useRouter()
+  const { locale, t } = useLanguage()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
+  const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const scannerContainerRef = React.useRef<HTMLDivElement | null>(null)
   const html5QrcodeRef = React.useRef<Html5Qrcode | null>(null)
   const hasDecodedRef = React.useRef(false)
@@ -138,15 +143,15 @@ export default function CheckInPage() {
         setStatus("success")
       } else {
         setStatus("error")
-        setErrorMessage(data.message || "Invalid QR code or session mismatch.")
+        setErrorMessage(data.message || t("checkIn.invalidQr"))
       }
     } catch {
       setStatus("error")
-      setErrorMessage("Network error. Please try again.")
+      setErrorMessage(t("checkIn.networkError"))
     } finally {
       setIsSubmitting(false)
     }
-  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session])
+  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session, t])
 
   const stopScanner = React.useCallback(async () => {
     const scanner = html5QrcodeRef.current
@@ -199,7 +204,7 @@ export default function CheckInPage() {
         } else {
           setIsScannerStarting(false)
           setStatus("error")
-          setErrorMessage("Scanner failed to initialize. Please try again.")
+          setErrorMessage(t("checkIn.scannerInitFailed"))
         }
         return
       }
@@ -236,7 +241,7 @@ export default function CheckInPage() {
         if (!cancelled) {
           setIsScannerStarting(false)
           setStatus("error")
-          setErrorMessage("Camera could not be started. Please check browser permissions and try again.")
+          setErrorMessage(t("checkIn.cameraFailed"))
         }
       }
     }
@@ -256,7 +261,7 @@ export default function CheckInPage() {
       setIsScannerStarting(false)
       void stopScanner()
     }
-  }, [handleCheckIn, status, stopScanner])
+  }, [handleCheckIn, status, stopScanner, t])
 
   React.useEffect(() => {
     return () => {
@@ -266,7 +271,7 @@ export default function CheckInPage() {
 
   const handleStartScanner = React.useCallback(() => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
-      setErrorMessage("Camera access requires HTTPS or localhost.")
+      setErrorMessage(t("checkIn.cameraHttpsRequired"))
       setStatus("error")
       return
     }
@@ -274,7 +279,7 @@ export default function CheckInPage() {
     setIsScannerStarting(true)
     setErrorMessage(null)
     setStatus("scanning")
-  }, [])
+  }, [t])
 
   const handleCancelScanner = React.useCallback(() => {
     setStatus("idle")
@@ -301,14 +306,17 @@ export default function CheckInPage() {
         <button type="button" onClick={() => router.back()} className="w-12 h-12 touch-manipulation rounded-2xl glass flex items-center justify-center text-slate-400 hover:text-white transition-all active:scale-90">
           <ArrowLeft size={24} />
         </button>
-        <h1 className="text-xl font-black tracking-tight text-gradient">Executive Check-in</h1>
-        <div className="w-12" />
+        <h1 className="text-xl font-black tracking-tight text-gradient">{t("checkIn.navTitle")}</h1>
+        <div className="flex items-center gap-2">
+          <LanguageToggle className="h-12 rounded-2xl glass px-3" />
+          <ModeToggle className="h-12 w-12 rounded-2xl glass" />
+        </div>
       </nav>
 
       <main className="flex-1 flex flex-col px-6 pb-12 space-y-10 max-w-md mx-auto w-full relative z-10">
         <header className="space-y-3 text-center">
-          <h2 className="text-4xl font-black text-white leading-tight tracking-tight">Access Your <br/>Workspace</h2>
-          <p className="text-slate-400 font-medium px-4">Verify your physical presence by scanning the desk QR label.</p>
+          <h2 className="text-4xl font-black text-white leading-tight tracking-tight">{t("checkIn.titleLine1")} <br/>{t("checkIn.titleLine2")}</h2>
+          <p className="text-slate-400 font-medium px-4">{t("checkIn.description")}</p>
         </header>
 
         {/* Scanner Area */}
@@ -331,10 +339,10 @@ export default function CheckInPage() {
                     {isScannerStarting ? (
                       <>
                         <Loader2 className="mr-2 animate-spin" size={18} />
-                        Opening Camera
+                        {t("checkIn.openingCamera")}
                       </>
                     ) : (
-                      "Initialize Scanner"
+                      t("checkIn.initializeScanner")
                     )}
                   </Button>
                 </motion.div>
@@ -347,7 +355,7 @@ export default function CheckInPage() {
                     <div className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-4 bg-slate-950/80 backdrop-blur-sm">
                       <Loader2 className="animate-spin text-primary-500" size={36} />
                       <p className="max-w-[220px] text-center text-sm font-semibold text-slate-300">
-                        Requesting camera access and preparing the scanner.
+                        {t("checkIn.requestingCamera")}
                       </p>
                     </div>
                   )}
@@ -366,11 +374,11 @@ export default function CheckInPage() {
                     <CheckCircle2 size={56} className="animate-bounce" />
                   </div>
                   <div>
-                    <h4 className="text-2xl font-black text-white">Check-in Verified</h4>
-                    <p className="text-slate-400 mt-2 font-medium">Your session is now active. <br/>Enjoy your workspace!</p>
+                    <h4 className="text-2xl font-black text-white">{t("checkIn.successTitle")}</h4>
+                    <p className="text-slate-400 mt-2 font-medium">{t("checkIn.successText")} <br/>{t("checkIn.successText2")}</p>
                   </div>
                   <Button onClick={handleGoToDashboard} className="bg-emerald-600 hover:bg-emerald-700 w-full h-12 rounded-xl font-bold">
-                    Go to Dashboard
+                    {t("checkIn.goDashboard")}
                   </Button>
                 </motion.div>
               )}
@@ -381,11 +389,11 @@ export default function CheckInPage() {
                     <AlertCircle size={56} />
                   </div>
                   <div>
-                    <h4 className="text-2xl font-black text-white">Verification Failed</h4>
+                    <h4 className="text-2xl font-black text-white">{t("checkIn.errorTitle")}</h4>
                     <p className="text-rose-400 mt-2 font-medium">{errorMessage}</p>
                   </div>
                   <Button onClick={() => setStatus("idle")} variant="ghost" className="text-slate-400 hover:text-white font-bold underline">
-                    Try Again
+                    {t("checkIn.tryAgain")}
                   </Button>
                 </motion.div>
               )}
@@ -398,7 +406,7 @@ export default function CheckInPage() {
           <div className="flex items-center justify-center">
             <button type="button" data-testid="check-in-toggle-manual" onClick={() => setManual(!manual)} className="touch-manipulation text-sm font-bold text-slate-500 hover:text-white flex items-center gap-2 transition-all">
               <QrCode size={18} />
-              {manual ? "Hide manual interface" : "Use manual entry code"}
+              {manual ? t("checkIn.hideManual") : t("checkIn.useManual")}
             </button>
           </div>
 
@@ -406,7 +414,7 @@ export default function CheckInPage() {
             {manual && (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
                 <div className="p-1 glass rounded-[1.5rem] border border-white/10 flex items-center gap-2">
-                  <Input data-testid="check-in-qr-input" placeholder="Enter desk ID..." value={qrValue} onChange={(e) => setQrValue(e.target.value)} className="bg-transparent border-none focus:ring-0 h-12 pl-4 font-bold tracking-widest text-primary-500 placeholder:text-slate-600 placeholder:font-normal placeholder:tracking-normal" />
+                  <Input data-testid="check-in-qr-input" placeholder={t("checkIn.manualPlaceholder")} value={qrValue} onChange={(e) => setQrValue(e.target.value)} className="bg-transparent border-none focus:ring-0 h-12 pl-4 font-bold tracking-widest text-primary-500 placeholder:text-slate-600 placeholder:font-normal placeholder:tracking-normal" />
                   <Button data-testid="check-in-submit-manual" onClick={() => handleCheckIn(qrValue)} disabled={isSubmitting || !qrValue} className="bg-primary-600 hover:bg-primary-700 h-10 w-12 rounded-xl shrink-0 p-0">
                     {isSubmitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={20} />}
                   </Button>
@@ -435,11 +443,11 @@ export default function CheckInPage() {
                 <History size={28} />
               </div>
               <div className="flex-1">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active/Next Reservation</p>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("checkIn.activeReservation")}</p>
                 <h4 className="text-xl font-bold text-white">{nextBooking.workspace_name}</h4>
                 <p className="text-xs text-slate-400 font-medium">
-                  {new Date(nextBooking.start_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
-                  {new Date(nextBooking.end_time).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  {new Date(nextBooking.start_time).toLocaleTimeString(dateLocale, {hour: '2-digit', minute:'2-digit'})} - 
+                  {new Date(nextBooking.end_time).toLocaleTimeString(dateLocale, {hour: '2-digit', minute:'2-digit'})}
                 </p>
               </div>
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" />
@@ -449,7 +457,7 @@ export default function CheckInPage() {
 
         <div className="flex gap-4 p-5 rounded-2xl bg-white/5 border border-white/5 text-xs text-slate-400 leading-relaxed font-medium">
           <Info size={20} className="text-primary-500 shrink-0" />
-          <p>Scanning the QR label confirms your physical attendance. Please ensure you are at the correct location within 15 minutes of your booking start time.</p>
+          <p>{t("checkIn.info")}</p>
         </div>
       </main>
     </div>

@@ -7,6 +7,9 @@ import { motion, AnimatePresence } from "framer-motion"
 import { LayoutDashboard, Map, CalendarRange, QrCode, Settings, LogOut, ShieldCheck, Bell, Search, Menu, X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/premium/ui/button"
+import { LanguageToggle } from "@/components/premium/ui/language-toggle"
+import { ModeToggle } from "@/components/premium/ui/mode-toggle"
+import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 
@@ -21,6 +24,7 @@ interface MeResponse {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const { t } = useLanguage()
   const [role, setRole] = React.useState<string | null>(null)
   const [scrolled, setScrolled] = React.useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
@@ -55,12 +59,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const isAdmin = role === 'admin' || role === 'manager'
 
   const navItems = [
-    { label: "Home", href: "/dashboard", icon: LayoutDashboard },
-    { label: "Book Space", href: "/floor-map", icon: Map },
-    { label: "My Bookings", href: "/bookings", icon: CalendarRange },
+    { label: t("layout.nav.home"), href: "/dashboard", icon: LayoutDashboard },
+    { label: t("layout.nav.bookSpace"), href: "/floor-map", icon: Map },
+    { label: t("layout.nav.myBookings"), href: "/bookings", icon: CalendarRange },
     ...(isAdmin ? [
-      { label: "QR Assets", href: "/workspace-qr", icon: QrCode },
-      { label: "System", href: "/admin/setup", icon: Settings },
+      { label: t("layout.nav.qrAssets"), href: "/workspace-qr", icon: QrCode },
+      { label: t("layout.nav.system"), href: "/admin/setup", icon: Settings },
     ] : []),
   ]
 
@@ -120,6 +124,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Right Actions */}
         <div className="flex items-center gap-3">
           <div className="hidden md:flex items-center gap-3 mr-4 border-r border-white/5 pr-6">
+             <LanguageToggle />
+             <ModeToggle />
              <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white rounded-full">
                 <Search size={20} />
              </Button>
@@ -131,8 +137,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           <div className="flex items-center gap-4">
             <div className="hidden sm:flex flex-col items-end text-right">
-              <p className="text-xs font-black text-white leading-none">{isAdmin ? "ADMIN ACCESS" : "EXECUTIVE"}</p>
-              <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1">PRO MEMBER</p>
+              <p className="text-xs font-black text-white leading-none">{isAdmin ? t("layout.role.admin") : t("layout.role.executive")}</p>
+              <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1">{t("layout.role.member")}</p>
             </div>
             <button 
               onClick={handleSignOut}
@@ -162,6 +168,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             className="fixed top-20 left-0 right-0 z-40 bg-[#07090D] border-b border-white/10 lg:hidden overflow-hidden"
           >
             <div className="p-6 space-y-4">
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
+                <span className="text-sm font-bold text-slate-400">{t("common.language")}</span>
+                <LanguageToggle />
+              </div>
+              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
+                <span className="text-sm font-bold text-slate-400">{t("common.theme")}</span>
+                <ModeToggle />
+              </div>
               {navItems.map((item) => (
                 <Link
                   key={item.href}
