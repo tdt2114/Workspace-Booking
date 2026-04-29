@@ -65,10 +65,18 @@ interface BuildingManagerProps {
 interface FloorManagerProps {
   floors: Floor[]
   buildings: Building[]
+  onRefresh: () => Promise<void>
+  apiBaseUrl: string
+  token: string
 }
 
 interface WorkspaceManagerProps {
   workspaces: Workspace[]
+  floors: Floor[]
+  buildings: Building[]
+  onRefresh: () => Promise<void>
+  apiBaseUrl: string
+  token: string
 }
 
 interface SvgMapperProps {
@@ -167,8 +175,8 @@ export default function AdminSetupPage() {
             transition={{ duration: 0.3, ease: "easeOut" }}
           >
             {activeTab === "buildings" ? (accessToken ? <BuildingManager buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "floors" && <FloorManager floors={floors} buildings={buildings} />}
-            {activeTab === "workspaces" && <WorkspaceManager workspaces={workspaces} />}
+            {activeTab === "floors" ? (accessToken ? <FloorManager floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
+            {activeTab === "workspaces" ? (accessToken ? <WorkspaceManager workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
             {activeTab === "svg-mapping" ? (accessToken ? <SvgMapper floors={floors} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
           </motion.div>
         </AnimatePresence>
@@ -197,7 +205,7 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
 function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingManagerProps) {
   const { t } = useLanguage()
   const [isSaving, setIsSaving] = React.useState(false)
-  const [form, setForm] = React.useState({ name: "", address: "", total_floors: 1 })
+  const [form, setForm] = React.useState({ name: "", address: "", totalFloors: 1, openTime: "08:00", closeTime: "18:00" })
 
   const handleCreate = async () => {
     if (!token) return
@@ -210,7 +218,7 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
       })
       if (res.ok) {
         await onRefresh()
-        setForm({ name: "", address: "", total_floors: 1 })
+        setForm({ name: "", address: "", totalFloors: 1, openTime: "08:00", closeTime: "18:00" })
       }
     } finally { setIsSaving(false) }
   }
@@ -232,6 +240,9 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
                 <div>
                   <h4 className="font-bold text-lg text-white">{b.name}</h4>
                   <p className="text-sm text-slate-500">{b.address || t("admin.noAddress")}</p>
+                  <p className="text-xs text-slate-600">
+                    {b.open_time && b.close_time ? `${b.open_time.slice(0, 5)} - ${b.close_time.slice(0, 5)}` : t("floorMap.notConfigured")}
+                  </p>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -263,7 +274,17 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.totalFloors")}</label>
-            <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.total_floors} onChange={e => setForm({...form, total_floors: parseInt(e.target.value)})} />
+            <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.totalFloors} onChange={e => setForm({...form, totalFloors: parseInt(e.target.value)})} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.openTime")}</label>
+              <Input type="time" className="bg-white/5 border-white/10 h-12 rounded-xl [color-scheme:dark]" value={form.openTime} onChange={e => setForm({...form, openTime: e.target.value})} />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.closeTime")}</label>
+              <Input type="time" className="bg-white/5 border-white/10 h-12 rounded-xl [color-scheme:dark]" value={form.closeTime} onChange={e => setForm({...form, closeTime: e.target.value})} />
+            </div>
           </div>
           <Button className="w-full mt-4 bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20" onClick={handleCreate} disabled={isSaving}>
             {isSaving ? t("admin.saving") : <><Save className="mr-2" size={20} /> {t("admin.createBuilding")}</>}
@@ -274,8 +295,38 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
   )
 }
 
-function FloorManager({ floors, buildings }: FloorManagerProps) {
+function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: FloorManagerProps) {
   const { t } = useLanguage()
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [form, setForm] = React.useState({
+    buildingId: buildings[0]?.id ?? "",
+    floorNumber: 1,
+    name: "",
+  })
+  const effectiveBuildingId = form.buildingId || buildings[0]?.id || ""
+
+  const handleCreate = async () => {
+    if (!token || !effectiveBuildingId) return
+    setIsSaving(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/floors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          buildingId: effectiveBuildingId,
+          floorNumber: form.floorNumber,
+          name: form.name || undefined,
+        }),
+      })
+
+      if (res.ok) {
+        await onRefresh()
+        setForm((current) => ({ ...current, floorNumber: current.floorNumber + 1, name: "" }))
+      }
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -313,20 +364,103 @@ function FloorManager({ floors, buildings }: FloorManagerProps) {
           <CardDescription>{t("admin.quickAddFloorDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
-           <p className="text-sm text-slate-400 text-center py-8">{t("admin.selectBuildingFirst")}</p>
-           <Button className="w-full bg-white/5 border border-white/10 text-slate-500 font-bold" disabled>{t("admin.createFloor")}</Button>
+          {buildings.length > 0 ? (
+            <>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.selectBuilding")}</label>
+                <select
+                  className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none"
+                  value={effectiveBuildingId}
+                  onChange={(e) => setForm({ ...form, buildingId: e.target.value })}
+                >
+                  {buildings.map((building) => (
+                    <option key={building.id} value={building.id} className="bg-slate-900 text-white">
+                      {building.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.floorNumber")}</label>
+                <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.floorNumber} onChange={(e) => setForm({ ...form, floorNumber: parseInt(e.target.value) })} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.floorName")}</label>
+                <Input placeholder={t("admin.floorNamePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleCreate} disabled={isSaving || !effectiveBuildingId}>
+                {isSaving ? t("admin.saving") : t("admin.createFloor")}
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-slate-400 text-center py-8">{t("admin.selectBuildingFirst")}</p>
+              <Button className="w-full bg-white/5 border border-white/10 text-slate-500 font-bold" disabled>{t("admin.createFloor")}</Button>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
   )
 }
 
-function WorkspaceManager({ workspaces }: WorkspaceManagerProps) {
+function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl, token }: WorkspaceManagerProps) {
   const { t } = useLanguage()
+  const [isSaving, setIsSaving] = React.useState(false)
+  const [form, setForm] = React.useState({
+    floorId: floors[0]?.id ?? "",
+    name: "",
+    type: "desk",
+    status: "available",
+    svgElementId: "",
+    qrCodeValue: "",
+    capacity: 1,
+  })
+  const effectiveFloorId = form.floorId || floors[0]?.id || ""
+
+  const describeFloor = React.useCallback((floor: Floor) => {
+    const building = buildings.find((item) => item.id === floor.building_id)
+    const floorName = floor.name || t("common.floorFallback").replace("{number}", String(floor.floor_number))
+
+    return building ? `${building.name} / ${floorName}` : floorName
+  }, [buildings, t])
+
+  const handleCreate = async () => {
+    if (!token || !effectiveFloorId || !form.name || !form.svgElementId || !form.qrCodeValue) return
+    setIsSaving(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/workspaces`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          floorId: effectiveFloorId,
+          name: form.name,
+          type: form.type,
+          status: form.status,
+          svgElementId: form.svgElementId,
+          qrCodeValue: form.qrCodeValue,
+          capacity: form.capacity,
+        }),
+      })
+
+      if (res.ok) {
+        await onRefresh()
+        setForm((current) => ({
+          ...current,
+          name: "",
+          svgElementId: "",
+          qrCodeValue: "",
+          capacity: 1,
+        }))
+      }
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
+      <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
         {workspaces.map((w: Workspace) => (
           <Card key={w.id} className="glass-panel border-white/5 hover:border-primary-500/30 transition-all group relative overflow-hidden">
              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -349,11 +483,71 @@ function WorkspaceManager({ workspaces }: WorkspaceManagerProps) {
              </CardContent>
           </Card>
         ))}
-        <button className="border-2 border-dashed border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-slate-500 hover:bg-white/5 hover:border-primary-500/50 transition-all group h-full min-h-[160px]">
-           <Plus size={32} className="mb-2 group-hover:scale-110 transition-transform" />
-           <span className="font-bold">{t("admin.newWorkspace")}</span>
-        </button>
       </div>
+
+      <Card className="glass-panel border-white/5 h-fit lg:sticky lg:top-8">
+        <CardHeader>
+          <CardTitle>{t("admin.newWorkspace")}</CardTitle>
+          <CardDescription>{t("admin.levelManagementDesc")}</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.selectFloor")}</label>
+            <select
+              className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none"
+              value={effectiveFloorId}
+              onChange={(e) => setForm({ ...form, floorId: e.target.value })}
+            >
+              {floors.map((floor) => (
+                <option key={floor.id} value={floor.id} className="bg-slate-900 text-white">
+                  {describeFloor(floor)}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceName")}</label>
+            <Input placeholder={t("admin.workspaceNamePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceType")}</label>
+              <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-3 text-white font-medium focus:outline-none" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+                {["desk", "meeting_room", "focus_room", "lab", "room", "parking"].map((type) => (
+                  <option key={type} value={type} className="bg-slate-900 text-white">{type}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceStatus")}</label>
+              <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-3 text-white font-medium focus:outline-none" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+                {["available", "maintenance", "inactive"].map((status) => (
+                  <option key={status} value={status} className="bg-slate-900 text-white">{status}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.svgId")}</label>
+            <Input placeholder={t("admin.svgIdPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.svgElementId} onChange={(e) => setForm({ ...form, svgElementId: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.qrCodeValue")}</label>
+            <Input placeholder={t("admin.qrCodePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.qrCodeValue} onChange={(e) => setForm({ ...form, qrCodeValue: e.target.value })} />
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.capacity")}</label>
+            <Input type="number" min={1} max={50} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: parseInt(e.target.value) })} />
+          </div>
+          <Button
+            className="w-full bg-primary-600 hover:bg-primary-700 h-12 font-black"
+            onClick={handleCreate}
+            disabled={isSaving || !effectiveFloorId || !form.name || !form.svgElementId || !form.qrCodeValue}
+          >
+            {isSaving ? t("admin.saving") : <><Plus className="mr-2" size={18} /> {t("admin.createWorkspace")}</>}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }

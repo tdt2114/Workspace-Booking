@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ZoomIn, ZoomOut, Maximize2, Map as MapIcon, ChevronRight, Calendar, Clock, AlertCircle, CheckCircle2, Building, Layers } from "lucide-react"
+import { ZoomIn, ZoomOut, Maximize2, Map as MapIcon, ChevronRight, Calendar, Clock, AlertCircle, CheckCircle2, Building, Layers, ArrowLeft } from "lucide-react"
+import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
@@ -13,6 +14,15 @@ import { useLanguage } from "@/components/premium/language-provider"
 import { cn } from "@/lib/utils"
 
 // --- Types ---
+interface BuildingRecord {
+  id: string
+  name: string
+  address: string | null
+  total_floors: number
+  open_time: string | null
+  close_time: string | null
+}
+
 interface FloorRecord {
   id: string
   building_id: string
@@ -44,6 +54,10 @@ type FloorMapStatus = WorkspaceRecord["status"] | "reserved"
 
 interface FloorsResponse {
   items: FloorRecord[]
+}
+
+interface BuildingsResponse {
+  items: BuildingRecord[]
 }
 
 interface WorkspacesResponse {
@@ -85,10 +99,13 @@ function buildDefaultTimeWindow() {
 
 export function FloorMapPremium() {
   const { t } = useLanguage()
+  const router = useRouter()
   const [session, setSession] = React.useState<Session | null>(null)
+  const [buildings, setBuildings] = React.useState<BuildingRecord[]>([])
   const [floors, setFloors] = React.useState<FloorRecord[]>([])
   const [workspaces, setWorkspaces] = React.useState<WorkspaceRecord[]>([])
   const [floorBookings, setFloorBookings] = React.useState<BookingRecord[]>([])
+  const [selectedBuildingId, setSelectedBuildingId] = React.useState<string | null>(null)
   const [selectedFloorId, setSelectedFloorId] = React.useState<string>("")
   const [selectedWorkspaceId, setSelectedWorkspaceId] = React.useState<string | null>(null)
   const [hoveredId, setHoveredId] = React.useState<string | null>(null)
@@ -106,9 +123,73 @@ export function FloorMapPremium() {
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
 
+  const selectedBuilding = React.useMemo(() => buildings.find(b => b.id === selectedBuildingId) ?? null, [buildings, selectedBuildingId])
+  const floorsForSelectedBuilding = React.useMemo(
+    () => selectedBuildingId ? floors.filter(f => f.building_id === selectedBuildingId) : [],
+    [floors, selectedBuildingId],
+  )
   const selectedFloor = React.useMemo(() => floors.find(f => f.id === selectedFloorId), [floors, selectedFloorId])
   const filteredWorkspaces = React.useMemo(() => workspaces.filter(w => w.floor_id === selectedFloorId), [workspaces, selectedFloorId])
   const selectedWorkspace = React.useMemo(() => filteredWorkspaces.find(w => w.id === selectedWorkspaceId), [filteredWorkspaces, selectedWorkspaceId])
+
+  const getBuildingStats = React.useCallback((buildingId: string) => {
+    const buildingFloors = floors.filter(floor => floor.building_id === buildingId)
+    const floorIds = new Set(buildingFloors.map(floor => floor.id))
+    const buildingWorkspaces = workspaces.filter(workspace => floorIds.has(workspace.floor_id))
+
+    return {
+      floorCount: buildingFloors.length,
+      workspaceCount: buildingWorkspaces.length,
+      availableCount: buildingWorkspaces.filter(workspace => workspace.status === "available").length,
+    }
+  }, [floors, workspaces])
+
+  const updateSelectionUrl = React.useCallback((buildingId: string | null, floorId?: string) => {
+    if (!buildingId) {
+      router.replace("/floor-map", { scroll: false })
+      return
+    }
+
+    const params = new URLSearchParams({ buildingId })
+
+    if (floorId) {
+      params.set("floorId", floorId)
+    }
+
+    router.replace(`/floor-map?${params.toString()}`, { scroll: false })
+  }, [router])
+
+  const handleSelectBuilding = React.useCallback((buildingId: string) => {
+    const firstFloorId = floors.find(floor => floor.building_id === buildingId)?.id ?? ""
+
+    setSelectedBuildingId(buildingId)
+    setSelectedFloorId(firstFloorId)
+    setSelectedWorkspaceId(null)
+    setBaseSvgMarkup(null)
+    setError(null)
+    setSuccess(null)
+    updateSelectionUrl(buildingId, firstFloorId)
+  }, [floors, updateSelectionUrl])
+
+  const handleBackToLocations = React.useCallback(() => {
+    setSelectedBuildingId(null)
+    setSelectedFloorId("")
+    setSelectedWorkspaceId(null)
+    setBaseSvgMarkup(null)
+    setFloorBookings([])
+    setError(null)
+    setSuccess(null)
+    updateSelectionUrl(null)
+  }, [updateSelectionUrl])
+
+  const handleSelectFloor = React.useCallback((floorId: string) => {
+    setSelectedFloorId(floorId)
+    setSelectedWorkspaceId(null)
+    setBaseSvgMarkup(null)
+    setError(null)
+    setSuccess(null)
+    updateSelectionUrl(selectedBuildingId, floorId)
+  }, [selectedBuildingId, updateSelectionUrl])
 
   // --- Data Fetching ---
   React.useEffect(() => {
@@ -119,17 +200,36 @@ export function FloorMapPremium() {
 
       try {
         const headers = { Authorization: `Bearer ${currentSession.access_token}` }
-        const [floorsRes, workspacesRes] = await Promise.all([
+        const [buildingsRes, floorsRes, workspacesRes] = await Promise.all([
+          fetch(`${apiBaseUrl}/buildings`, { headers }),
           fetch(`${apiBaseUrl}/floors`, { headers }),
           fetch(`${apiBaseUrl}/workspaces`, { headers })
         ])
 
-        if (floorsRes.ok && workspacesRes.ok) {
+        if (buildingsRes.ok && floorsRes.ok && workspacesRes.ok) {
+          const buildingsData = await buildingsRes.json() as BuildingsResponse
           const floorsData = await floorsRes.json() as FloorsResponse
           const workspacesData = await workspacesRes.json() as WorkspacesResponse
+          const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams()
+          const requestedBuildingId = query.get("buildingId")
+          const requestedFloorId = query.get("floorId")
+          const buildingItems = buildingsData.items
+          const floorItems = floorsData.items
+
+          const initialBuildingId = buildingItems.some(building => building.id === requestedBuildingId)
+            ? requestedBuildingId
+            : null
+          const initialFloorId = initialBuildingId && floorItems.some(floor => floor.id === requestedFloorId && floor.building_id === initialBuildingId)
+            ? requestedFloorId ?? ""
+            : initialBuildingId
+              ? floorItems.find(floor => floor.building_id === initialBuildingId)?.id ?? ""
+              : ""
+
+          setBuildings(buildingItems)
           setFloors(floorsData.items)
           setWorkspaces(workspacesData.items)
-          if (floorsData.items.length > 0) setSelectedFloorId(floorsData.items[0].id)
+          setSelectedBuildingId(initialBuildingId)
+          setSelectedFloorId(initialFloorId)
         }
       } catch (err) {
         console.error("Bootstrap error:", err)
@@ -174,7 +274,10 @@ export function FloorMapPremium() {
   // --- Load SVG ---
   React.useEffect(() => {
     const loadSvg = async () => {
+      setBaseSvgMarkup(null)
+
       if (!selectedFloor?.svg_map_url || !session) return
+
       try {
         const res = await fetch(`${apiBaseUrl}/floors/${selectedFloor.id}/svg`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
@@ -289,19 +392,123 @@ export function FloorMapPremium() {
     </div>
   )
 
+  if (!selectedBuildingId) {
+    return (
+      <div className="flex flex-col h-full space-y-8" data-testid="floor-map-location-step">
+        <div className="space-y-3">
+          <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/20 bg-primary-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-primary-400">
+            <Building size={14} />
+            {t("floorMap.chooseLocation")}
+          </div>
+          <p className="max-w-2xl text-sm font-medium text-slate-400">{t("floorMap.chooseLocationDescription")}</p>
+        </div>
+
+        {buildings.length > 0 ? (
+          <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
+            {buildings.map((building) => {
+              const stats = getBuildingStats(building.id)
+              const openHours = building.open_time && building.close_time
+                ? `${building.open_time.slice(0, 5)} - ${building.close_time.slice(0, 5)}`
+                : t("floorMap.notConfigured")
+
+              return (
+                <motion.button
+                  key={building.id}
+                  type="button"
+                  data-testid="floor-map-building-card"
+                  initial={{ opacity: 0, y: 16 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  onClick={() => handleSelectBuilding(building.id)}
+                  className="group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 p-6 text-left transition-all hover:-translate-y-1 hover:border-primary-500/40 hover:bg-primary-500/10"
+                >
+                  <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary-500/10 blur-2xl transition-opacity group-hover:opacity-100" />
+                  <div className="relative z-10 space-y-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-500/10 text-primary-500 ring-1 ring-primary-500/20">
+                        <Building size={28} />
+                      </div>
+                      <ChevronRight className="text-slate-500 transition-transform group-hover:translate-x-1 group-hover:text-primary-400" size={22} />
+                    </div>
+
+                    <div className="space-y-2">
+                      <h3 className="text-2xl font-black text-white">{building.name}</h3>
+                      <p className="min-h-10 text-sm font-medium leading-relaxed text-slate-400">
+                        {building.address || t("admin.noAddress")}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-3">
+                      <div className="rounded-2xl border border-white/5 bg-white/5 p-3">
+                        <p className="text-lg font-black text-white">{stats.floorCount}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t("admin.floorsLabel")}</p>
+                      </div>
+                      <div className="rounded-2xl border border-white/5 bg-white/5 p-3">
+                        <p className="text-lg font-black text-white">{stats.workspaceCount}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t("layout.nav.bookSpace")}</p>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/10 p-3">
+                        <p className="text-lg font-black text-emerald-400">{stats.availableCount}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500/80">{t("floorMap.available")}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-between border-t border-white/5 pt-5">
+                      <div>
+                        <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.openHours")}</p>
+                        <p className="text-sm font-bold text-slate-300">{openHours}</p>
+                      </div>
+                      <span className="rounded-full bg-primary-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-primary-500/20">
+                        {t("floorMap.continueToMap")}
+                      </span>
+                    </div>
+                  </div>
+                </motion.button>
+              )
+            })}
+          </div>
+        ) : (
+          <Card className="glass-panel flex min-h-[320px] items-center justify-center border-dashed border-white/10 p-10 text-center">
+            <div className="space-y-4 text-slate-500">
+              <Building size={64} className="mx-auto opacity-30" />
+              <p className="font-bold">{t("floorMap.locationsEmpty")}</p>
+            </div>
+          </Card>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col h-full space-y-6" data-testid="floor-map-shell">
       {/* Filters Bar */}
       <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center">
+        <button
+          type="button"
+          onClick={handleBackToLocations}
+          className="touch-manipulation flex items-center gap-2 rounded-2xl border border-white/5 px-4 py-2 text-sm font-bold text-slate-400 transition-all hover:border-primary-500/30 hover:text-white"
+        >
+          <ArrowLeft size={18} />
+          {t("floorMap.backToLocations")}
+        </button>
+
         <div className="flex items-center gap-2 glass px-4 py-2 rounded-2xl border-white/5">
-          <Building size={18} className="text-slate-400" />
+          <Building size={18} className="text-primary-400" />
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.selectedLocation")}</p>
+            <p className="truncate text-sm font-bold text-white">{selectedBuilding?.name}</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 glass px-4 py-2 rounded-2xl border-white/5">
+          <Layers size={18} className="text-slate-400" />
           <select 
             data-testid="floor-map-floor-select"
             className="min-w-0 flex-1 bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
-            onChange={(e) => setSelectedFloorId(e.target.value)}
+            aria-label={t("floorMap.chooseFloor")}
+            onChange={(e) => handleSelectFloor(e.target.value)}
             value={selectedFloorId}
           >
-            {floors.map(f => (
+            {floorsForSelectedBuilding.map(f => (
               <option key={f.id} value={f.id} className="bg-slate-900 text-white">
                 {f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}
               </option>
