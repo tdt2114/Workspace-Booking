@@ -95,6 +95,28 @@ function Stop-MobileProcessTree {
   }
 }
 
+function Stop-MobileTrackedProcesses {
+  param(
+    [Parameter(Mandatory = $true)]
+    [psobject]$State
+  )
+
+  foreach ($process in $State.processes) {
+    if (Test-MobileProcessAlive -Id $process.pid) {
+      Write-Host "Stopping $($process.name)..." -ForegroundColor Cyan
+
+      try {
+        Stop-MobileProcessTree -Id $process.pid
+        Write-Host "Stopped $($process.name)." -ForegroundColor Green
+      } catch {
+        Write-Host "$($process.name) was already closed." -ForegroundColor Yellow
+      }
+    } else {
+      Write-Host "$($process.name) was already closed." -ForegroundColor Yellow
+    }
+  }
+}
+
 function Wait-ForHttpReady {
   param(
     [Parameter(Mandatory = $true)]

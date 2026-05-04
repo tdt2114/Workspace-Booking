@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Camera, QrCode, ArrowLeft, CheckCircle2, AlertCircle, History, Info, Send, Loader2, X } from "lucide-react"
+import { Camera, QrCode, ArrowLeft, CheckCircle2, AlertCircle, History, Info, Send, Loader2, X, ListChecks } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import type { Html5Qrcode } from "html5-qrcode"
@@ -11,6 +11,7 @@ import { Card, CardContent } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
 import { LanguageToggle } from "@/components/premium/ui/language-toggle"
 import { ModeToggle } from "@/components/premium/ui/mode-toggle"
+import { useToast } from "@/components/premium/ui/toast"
 import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
@@ -56,6 +57,7 @@ function findNextRelevantBooking(bookings: Booking[]) {
 export default function CheckInPage() {
   const router = useRouter()
   const { locale, t } = useLanguage()
+  const { toast } = useToast()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const scannerContainerRef = React.useRef<HTMLDivElement | null>(null)
@@ -78,6 +80,14 @@ export default function CheckInPage() {
   const [nextBooking, setNextBooking] = React.useState<Booking | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [isScannerStarting, setIsScannerStarting] = React.useState(false)
+  const [isNavigating, setIsNavigating] = React.useState(false)
+  const [navigationTarget, setNavigationTarget] = React.useState<"dashboard" | "bookings" | null>(null)
+
+  const enableManualFallback = React.useCallback((message: string) => {
+    setManual(true)
+    setErrorMessage(message)
+    setStatus("error")
+  }, [])
 
   // --- Auth & Initial Data ---
   React.useEffect(() => {
@@ -141,17 +151,25 @@ export default function CheckInPage() {
           })
         }
         setStatus("success")
+        toast({
+          title: t("checkIn.successTitle"),
+          description: t("checkIn.successText"),
+          variant: "success",
+        })
       } else {
         setStatus("error")
-        setErrorMessage(data.message || t("checkIn.invalidQr"))
+        const message = data.message || t("checkIn.invalidQr")
+        setErrorMessage(message)
+        toast({ title: t("checkIn.errorTitle"), description: message, variant: "error" })
       }
     } catch {
       setStatus("error")
       setErrorMessage(t("checkIn.networkError"))
+      toast({ title: t("checkIn.errorTitle"), description: t("checkIn.networkError"), variant: "error" })
     } finally {
       setIsSubmitting(false)
     }
-  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session, t])
+  }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session, t, toast])
 
   const stopScanner = React.useCallback(async () => {
     const scanner = html5QrcodeRef.current
@@ -203,8 +221,7 @@ export default function CheckInPage() {
           }, 100)
         } else {
           setIsScannerStarting(false)
-          setStatus("error")
-          setErrorMessage(t("checkIn.scannerInitFailed"))
+          enableManualFallback(t("checkIn.scannerInitFailed"))
         }
         return
       }
@@ -240,8 +257,7 @@ export default function CheckInPage() {
 
         if (!cancelled) {
           setIsScannerStarting(false)
-          setStatus("error")
-          setErrorMessage(t("checkIn.cameraFailed"))
+          enableManualFallback(t("checkIn.cameraFailed"))
         }
       }
     }
@@ -261,7 +277,7 @@ export default function CheckInPage() {
       setIsScannerStarting(false)
       void stopScanner()
     }
-  }, [handleCheckIn, status, stopScanner, t])
+  }, [enableManualFallback, handleCheckIn, status, stopScanner, t])
 
   React.useEffect(() => {
     return () => {
@@ -271,15 +287,15 @@ export default function CheckInPage() {
 
   const handleStartScanner = React.useCallback(() => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
-      setErrorMessage(t("checkIn.cameraHttpsRequired"))
-      setStatus("error")
+      enableManualFallback(t("checkIn.cameraHttpsRequired"))
+      toast({ title: t("checkIn.errorTitle"), description: t("checkIn.cameraHttpsRequired"), variant: "error" })
       return
     }
 
     setIsScannerStarting(true)
     setErrorMessage(null)
     setStatus("scanning")
-  }, [t])
+  }, [enableManualFallback, t, toast])
 
   const handleCancelScanner = React.useCallback(() => {
     setStatus("idle")
@@ -287,13 +303,17 @@ export default function CheckInPage() {
     void stopScanner()
   }, [stopScanner])
 
-  const handleGoToDashboard = React.useCallback(() => {
+  const handleNavigate = React.useCallback((target: "dashboard" | "bookings") => {
+    setIsNavigating(true)
+    setNavigationTarget(target)
+    const href = target === "dashboard" ? "/dashboard" : "/bookings"
+
     if (typeof window !== "undefined") {
-      window.location.assign("/dashboard")
+      window.location.assign(href)
       return
     }
 
-    router.push("/dashboard")
+    router.push(href)
   }, [router])
 
   return (
@@ -336,14 +356,7 @@ export default function CheckInPage() {
                     <Camera size={48} />
                   </div>
                   <Button onClick={handleStartScanner} disabled={isScannerStarting || isSubmitting} className="bg-primary-600 hover:bg-primary-700 font-black h-14 px-10 rounded-2xl shadow-xl shadow-primary-500/20 active:scale-95 transition-all">
-                    {isScannerStarting ? (
-                      <>
-                        <Loader2 className="mr-2 animate-spin" size={18} />
-                        {t("checkIn.openingCamera")}
-                      </>
-                    ) : (
-                      t("checkIn.initializeScanner")
-                    )}
+                    {isScannerStarting ? <><Loader2 className="mr-2 animate-spin" size={18} />{t("checkIn.openingCamera")}</> : t("checkIn.initializeScanner")}
                   </Button>
                 </motion.div>
               )}
@@ -377,9 +390,26 @@ export default function CheckInPage() {
                     <h4 className="text-2xl font-black text-white">{t("checkIn.successTitle")}</h4>
                     <p className="text-slate-400 mt-2 font-medium">{t("checkIn.successText")} <br/>{t("checkIn.successText2")}</p>
                   </div>
-                  <Button onClick={handleGoToDashboard} className="bg-emerald-600 hover:bg-emerald-700 w-full h-12 rounded-xl font-bold">
-                    {t("checkIn.goDashboard")}
-                  </Button>
+                  <div className="grid gap-3">
+                    <Button
+                      onClick={() => handleNavigate("dashboard")}
+                      isLoading={isNavigating && navigationTarget === "dashboard"}
+                      loadingText={t("checkIn.openingDashboard")}
+                      className="bg-emerald-600 hover:bg-emerald-700 w-full h-12 rounded-xl font-bold"
+                    >
+                      {t("checkIn.goDashboard")}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      onClick={() => handleNavigate("bookings")}
+                      isLoading={isNavigating && navigationTarget === "bookings"}
+                      loadingText={t("checkIn.openingBookings")}
+                      className="w-full h-12 rounded-xl font-bold"
+                    >
+                      <ListChecks className="mr-2" size={18} />
+                      {t("checkIn.goBookings")}
+                    </Button>
+                  </div>
                 </motion.div>
               )}
 
@@ -391,10 +421,17 @@ export default function CheckInPage() {
                   <div>
                     <h4 className="text-2xl font-black text-white">{t("checkIn.errorTitle")}</h4>
                     <p className="text-rose-400 mt-2 font-medium">{errorMessage}</p>
+                    <p className="mt-3 text-xs font-medium leading-relaxed text-slate-400">{t("checkIn.manualFallbackHint")}</p>
                   </div>
-                  <Button onClick={() => setStatus("idle")} variant="ghost" className="text-slate-400 hover:text-white font-bold underline">
-                    {t("checkIn.tryAgain")}
-                  </Button>
+                  <div className="grid gap-3">
+                    <Button onClick={() => setStatus("idle")} variant="secondary" className="h-11 font-bold">
+                      {t("checkIn.tryAgain")}
+                    </Button>
+                    <Button onClick={() => setManual(true)} className="h-11 bg-primary-600 font-bold hover:bg-primary-700">
+                      <QrCode className="mr-2" size={18} />
+                      {t("checkIn.useManualShort")}
+                    </Button>
+                  </div>
                 </motion.div>
               )}
             </AnimatePresence>
@@ -413,6 +450,9 @@ export default function CheckInPage() {
           <AnimatePresence>
             {manual && (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="space-y-3">
+                <p className="rounded-2xl border border-primary-500/20 bg-primary-500/10 p-3 text-center text-xs font-semibold leading-relaxed text-primary-200">
+                  {t("checkIn.manualHelp")}
+                </p>
                 <div className="p-1 glass rounded-[1.5rem] border border-white/10 flex items-center gap-2">
                   <Input data-testid="check-in-qr-input" placeholder={t("checkIn.manualPlaceholder")} value={qrValue} onChange={(e) => setQrValue(e.target.value)} className="bg-transparent border-none focus:ring-0 h-12 pl-4 font-bold tracking-widest text-primary-500 placeholder:text-slate-600 placeholder:font-normal placeholder:tracking-normal" />
                   <Button data-testid="check-in-submit-manual" onClick={() => handleCheckIn(qrValue)} disabled={isSubmitting || !qrValue} className="bg-primary-600 hover:bg-primary-700 h-10 w-12 rounded-xl shrink-0 p-0">

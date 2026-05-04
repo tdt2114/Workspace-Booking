@@ -59,4 +59,14 @@ try {
 } catch {
   Write-Host $_ -ForegroundColor Red
   throw
+} finally {
+  $currentState = Read-MobileState
+
+  if ($currentState) {
+    Write-Host ""
+    Write-Host "Tunnel closed. Cleaning up preview processes..." -ForegroundColor Yellow
+    Stop-MobileTrackedProcesses -State $currentState
+    Remove-MobileState
+    Write-Host "Preview session cleaned up." -ForegroundColor Green
+  }
 }

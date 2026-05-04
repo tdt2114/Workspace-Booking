@@ -9,8 +9,10 @@ import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
 import { useLanguage } from "@/components/premium/language-provider"
+import { useToast } from "@/components/premium/ui/toast"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
+import { readApiError } from "@/lib/http-feedback"
 import { cn } from "@/lib/utils"
 
 interface Booking {
@@ -39,16 +41,38 @@ interface StatCardProps {
   icon: React.ReactNode
 }
 
-type BookingStatusConfig = Record<Booking["status"], { label: string; className: string }>
+type BookingDisplayStatus = "upcoming" | "active" | "checkedIn" | "completed" | "cancelled" | "noShow"
+type BookingStatusConfig = Record<BookingDisplayStatus, { label: string; className: string }>
 
 interface BookingItemProps {
   booking: Booking
   onCancel: () => void
   isActionLoading: boolean
+  now: number
+}
+
+function getBookingDisplayStatus(booking: Booking, now: number): BookingDisplayStatus {
+  const start = new Date(booking.start_time).getTime()
+  const end = new Date(booking.end_time).getTime()
+
+  if (booking.status === "checked_in") return "checkedIn"
+  if (booking.status === "completed") return "completed"
+  if (booking.status === "cancelled") return "cancelled"
+  if (booking.status === "no_show") return "noShow"
+  if (Number.isFinite(start) && now < start) return "upcoming"
+  if (Number.isFinite(end) && now <= end) return "active"
+
+  return "completed"
+}
+
+function tFallback(t: (path: string) => string, path: string, fallback: string) {
+  const value = t(path)
+  return value === path ? fallback : value
 }
 
 export default function BookingsPage() {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<"my" | "system">("my")
   const [bookings, setBookings] = React.useState<Booking[]>([])
@@ -57,6 +81,7 @@ export default function BookingsPage() {
   const [actionLoading, setActionLoading] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
   const [isAdmin, setIsAdmin] = React.useState(false)
+  const [currentTime, setCurrentTime] = React.useState(() => Date.now())
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
 
@@ -71,13 +96,18 @@ export default function BookingsPage() {
         const data = await res.json() as BookingsResponse
         if (tab === "my") setBookings(data.items || [])
         else setSystemBookings(data.items || [])
+      } else {
+        const message = await readApiError(res, t("bookings.loadFailed"))
+        toast({ title: t("bookings.loadFailed"), description: message, variant: "error" })
       }
     } catch (err) {
       console.error("Failed to load bookings:", err)
+      toast({ title: t("bookings.loadFailed"), description: t("bookings.networkError"), variant: "error" })
     } finally {
+      setCurrentTime(Date.now())
       setLoading(false)
     }
-  }, [apiBaseUrl])
+  }, [apiBaseUrl, t, toast])
 
   React.useEffect(() => {
     const bootstrap = async () => {
@@ -98,7 +128,8 @@ export default function BookingsPage() {
 
   const handleAction = async (bookingId: string, action: 'cancel' | 'no-show' | 'complete') => {
     if (!session) return
-    setActionLoading(bookingId)
+    const loadingKey = action === "cancel" ? bookingId : action
+    setActionLoading(loadingKey)
     try {
       let endpoint = `${apiBaseUrl}/bookings/${bookingId}/cancel`
       const method = "PATCH"
@@ -116,9 +147,18 @@ export default function BookingsPage() {
       
       if (res.ok) {
         void loadData(session.access_token, activeTab)
+        toast({
+          title: t("bookings.actionSuccess"),
+          description: t(`bookings.actions.${action}`),
+          variant: "success",
+        })
+      } else {
+        const message = await readApiError(res, t("bookings.actionFailed"))
+        toast({ title: t("bookings.actionFailed"), description: message, variant: "error" })
       }
     } catch (err) {
       console.error("Action error:", err)
+      toast({ title: t("bookings.actionFailed"), description: t("bookings.networkError"), variant: "error" })
     } finally {
       setActionLoading(null)
     }
@@ -131,13 +171,16 @@ export default function BookingsPage() {
 
   const stats = React.useMemo(() => {
     const list = activeTab === "my" ? bookings : systemBookings
+    const phases = list.map((booking) => getBookingDisplayStatus(booking, currentTime))
+
     return {
       total: list.length,
-      confirmed: list.filter(b => b.status === 'confirmed').length,
-      completed: list.filter(b => b.status === 'completed').length,
-      cancelled: list.filter(b => b.status === 'cancelled' || b.status === 'no_show').length,
+      upcoming: phases.filter((status) => status === "upcoming").length,
+      active: phases.filter((status) => status === "active" || status === "checkedIn").length,
+      completed: phases.filter((status) => status === "completed").length,
+      cancelled: phases.filter((status) => status === "cancelled" || status === "noShow").length,
     }
-  }, [activeTab, bookings, systemBookings])
+  }, [activeTab, bookings, currentTime, systemBookings])
 
   return (
     <DashboardLayout>
@@ -177,9 +220,9 @@ export default function BookingsPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <StatCard label={t("bookings.stats.total")} value={stats.total} icon={<Calendar className="text-blue-500" size={20} />} />
-          <StatCard label={t("bookings.stats.live")} value={stats.confirmed} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
+          <StatCard label={tFallback(t, "bookings.stats.upcoming", "Upcoming")} value={stats.upcoming} icon={<Clock className="text-blue-500" size={20} />} />
+          <StatCard label={t("bookings.stats.live")} value={stats.active} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
           <StatCard label={t("bookings.stats.finalized")} value={stats.completed} icon={<History className="text-slate-400" size={20} />} />
-          <StatCard label={t("bookings.stats.terminated")} value={stats.cancelled} icon={<XCircle className="text-rose-500" size={20} />} />
         </div>
 
         <AnimatePresence mode="wait">
@@ -219,6 +262,7 @@ export default function BookingsPage() {
                       booking={b}
                       onCancel={() => handleAction(b.id, 'cancel')}
                       isActionLoading={actionLoading === b.id}
+                      now={currentTime}
                     />
                   ))
                 ) : (
@@ -250,6 +294,8 @@ export default function BookingsPage() {
                         data-testid="bookings-run-no-show"
                         onClick={() => handleAction('bulk', 'no-show')}
                         className="w-full bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/20 font-bold h-10 rounded-xl"
+                        isLoading={actionLoading === "no-show"}
+                        disabled={Boolean(actionLoading)}
                       >
                         <Play size={14} className="mr-2" />
                         {t("bookings.executeCleanup")}
@@ -265,6 +311,8 @@ export default function BookingsPage() {
                         data-testid="bookings-run-completed"
                         onClick={() => handleAction('bulk', 'complete')}
                         className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 font-bold h-10 rounded-xl"
+                        isLoading={actionLoading === "complete"}
+                        disabled={Boolean(actionLoading)}
                       >
                         <Play size={14} className="mr-2" />
                         {t("bookings.archivePastSessions")}
@@ -281,10 +329,10 @@ export default function BookingsPage() {
                 <CardContent className="space-y-4">
                   <div className="flex justify-between text-xs font-bold mb-1">
                     <span className="text-slate-500">{t("bookings.activeBookings")}</span>
-                    <span className="text-white">{stats.confirmed}/5</span>
+                    <span className="text-white">{stats.active + stats.upcoming}/5</span>
                   </div>
                   <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${(stats.confirmed / 5) * 100}%` }} />
+                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.min(((stats.active + stats.upcoming) / 5) * 100, 100)}%` }} />
                   </div>
                   <div className="flex gap-3 pt-4 border-t border-white/5">
                     <Info size={16} className="text-slate-500 shrink-0" />
@@ -316,18 +364,20 @@ function StatCard({ label, value, icon }: StatCardProps) {
   )
 }
 
-function BookingItem({ booking, onCancel, isActionLoading }: BookingItemProps) {
+function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemProps) {
   const { locale, t } = useLanguage()
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const statusConfig: BookingStatusConfig = {
-    confirmed: { label: t("bookings.status.confirmed"), className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
-    checked_in: { label: t("bookings.status.checkedIn"), className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
+    upcoming: { label: tFallback(t, "bookings.status.upcoming", "Upcoming"), className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
+    active: { label: tFallback(t, "bookings.status.active", "Active"), className: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" },
+    checkedIn: { label: t("bookings.status.checkedIn"), className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
     completed: { label: t("bookings.status.completed"), className: "bg-slate-500/10 text-slate-400 border-white/5" },
     cancelled: { label: t("bookings.status.cancelled"), className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
-    no_show: { label: t("bookings.status.noShow"), className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+    noShow: { label: t("bookings.status.noShow"), className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
   }
 
-  const cfg = statusConfig[booking.status]
+  const displayStatus = getBookingDisplayStatus(booking, now)
+  const cfg = statusConfig[displayStatus]
 
   return (
     <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl border border-white/5 bg-white/5 hover:border-primary-500/30 transition-all gap-4">

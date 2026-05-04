@@ -8,18 +8,7 @@ if (-not $state) {
   exit 0
 }
 
-foreach ($process in $state.processes) {
-  if (Test-MobileProcessAlive -Id $process.pid) {
-    try {
-      Stop-MobileProcessTree -Id $process.pid
-      Write-Host "Stopped $($process.name)." -ForegroundColor Green
-    } catch {
-      Write-Host "$($process.name) was already closed." -ForegroundColor Yellow
-    }
-  } else {
-    Write-Host "$($process.name) was already closed." -ForegroundColor Yellow
-  }
-}
+Stop-MobileTrackedProcesses -State $state
 
 Remove-MobileState
 Write-Host "Preview session stopped. You can close any old tunnel browser tabs." -ForegroundColor Green

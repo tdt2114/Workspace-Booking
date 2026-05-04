@@ -3,13 +3,14 @@
 import * as React from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, ArrowRight, Scan, MapPin, Loader2, Building2, Stars, Search } from "lucide-react"
+import { Calendar, ArrowRight, Scan, MapPin, Loader2, Building2, Stars, Search, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Input } from "@/components/premium/ui/input"
+import { useToast } from "@/components/premium/ui/toast"
 import { useLanguage } from "@/components/premium/language-provider"
 import { cn } from "@/lib/utils"
 
@@ -38,7 +39,9 @@ interface CategoryCardProps {
 export default function DashboardPage() {
   const router = useRouter()
   const { locale, t } = useLanguage()
+  const { toast } = useToast()
   const [loading, setLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
   const [bookings, setBookings] = React.useState<Booking[]>([])
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
 
@@ -49,15 +52,21 @@ export default function DashboardPage() {
       const { data: { session: currentSession } } = await supabase.auth.getSession()
       if (currentSession) {
         try {
+          setLoadError(null)
           const bookingsRes = await fetch(`${apiBaseUrl}/bookings/my`, {
             headers: { Authorization: `Bearer ${currentSession.access_token}` }
           })
           if (bookingsRes.ok) {
             const data = await bookingsRes.json() as BookingsResponse
             setBookings(data.items || [])
+          } else {
+            setLoadError(t("dashboard.loadFailed"))
+            toast({ title: t("dashboard.loadFailed"), variant: "error" })
           }
         } catch (err) {
           console.error("Dashboard fetch error:", err)
+          setLoadError(t("dashboard.networkError"))
+          toast({ title: t("dashboard.loadFailed"), description: t("dashboard.networkError"), variant: "error" })
         }
       } else {
         router.push("/login")
@@ -65,7 +74,7 @@ export default function DashboardPage() {
       setLoading(false)
     }
     bootstrap()
-  }, [apiBaseUrl, router])
+  }, [apiBaseUrl, router, t, toast])
 
   const checkInTarget = React.useMemo(() => {
     const now = new Date()
@@ -199,7 +208,16 @@ export default function DashboardPage() {
           </div>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {bookings.filter(b => b.status === 'confirmed').length > 0 ? (
+            {loadError ? (
+              <div className="md:col-span-2 glass rounded-[2.5rem] border border-rose-500/20 bg-rose-500/10 p-8 text-center">
+                <AlertCircle className="mx-auto mb-4 text-rose-400" size={40} />
+                <p className="text-lg font-black text-white">{t("dashboard.loadFailed")}</p>
+                <p className="mt-2 text-sm font-medium text-slate-400">{loadError}</p>
+                <Button className="mt-6 bg-primary-600 font-bold hover:bg-primary-700" onClick={() => window.location.reload()}>
+                  {t("dashboard.retry")}
+                </Button>
+              </div>
+            ) : bookings.filter(b => b.status === 'confirmed').length > 0 ? (
               bookings.filter(b => b.status === 'confirmed').slice(0, 2).map((b) => (
                 <div key={b.id} className="p-6 glass rounded-[2.5rem] border-white/5 hover:border-primary-500/30 transition-all group flex items-center justify-between">
                   <div className="flex items-center gap-6">
@@ -215,8 +233,13 @@ export default function DashboardPage() {
                 </div>
               ))
             ) : (
-              <div className="md:col-span-2 py-20 glass rounded-[2.5rem] border-dashed border-2 border-white/5 text-center opacity-30">
-                <p className="text-lg font-bold">{t("dashboard.emptyBookings")}</p>
+              <div className="md:col-span-2 glass rounded-[2.5rem] border-dashed border-2 border-white/5 p-10 text-center">
+                <Calendar className="mx-auto mb-4 text-slate-600" size={48} />
+                <p className="text-lg font-black text-white">{t("dashboard.emptyBookings")}</p>
+                <p className="mx-auto mt-2 max-w-lg text-sm font-medium text-slate-500">{t("dashboard.emptyBookingsHint")}</p>
+                <Button asChild className="mt-6 bg-primary-600 font-bold hover:bg-primary-700">
+                  <Link href="/floor-map">{t("dashboard.bookFirstSpace")}</Link>
+                </Button>
               </div>
             )}
           </div>

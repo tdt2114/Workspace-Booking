@@ -2,16 +2,19 @@
 
 import * as React from "react"
 import Image from "next/image"
+import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { QrCode, Search, Download, Copy, Printer, Info, CheckCircle2, Layers } from "lucide-react"
+import { QrCode, Search, Download, Copy, Printer, Info, CheckCircle2, Layers, Loader2, AlertCircle, Settings2 } from "lucide-react"
 import QRCode from "qrcode"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useToast } from "@/components/premium/ui/toast"
 import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
+import { readApiError } from "@/lib/http-feedback"
 import { cn } from "@/lib/utils"
 
 interface Workspace {
@@ -38,40 +41,58 @@ interface FloorsResponse {
 
 export default function WorkspaceQrPage() {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([])
   const [floors, setFloors] = React.useState<Floor[]>([])
   const [selectedId, setSelectedId] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
   const [selectedFloorId, setSelectedFloorId] = React.useState("all")
   const [loading, setLoading] = React.useState(true)
+  const [loadError, setLoadError] = React.useState<string | null>(null)
   const [qrImageUrl, setQrImageUrl] = React.useState<string | null>(null)
   const [copySuccess, setCopySuccess] = React.useState(false)
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
 
-  React.useEffect(() => {
-    const bootstrap = async () => {
+  const loadData = React.useCallback(async () => {
+      setLoading(true)
+      setLoadError(null)
       const { data: { session: currentSession } } = await supabase.auth.getSession()
       if (currentSession) {
-        const headers = { Authorization: `Bearer ${currentSession.access_token}` }
-        const [wRes, fRes] = await Promise.all([
-          fetch(`${apiBaseUrl}/workspaces`, { headers }),
-          fetch(`${apiBaseUrl}/floors`, { headers })
-        ])
-        if (wRes.ok && fRes.ok) {
-          const wData = await wRes.json() as WorkspacesResponse
-          const fData = await fRes.json() as FloorsResponse
-          const workspaceItems = wData.items || []
-          const floorItems = fData.items || []
-          setWorkspaces(workspaceItems)
-          setFloors(floorItems)
-          if (workspaceItems.length > 0) setSelectedId(workspaceItems[0].id)
+        try {
+          const headers = { Authorization: `Bearer ${currentSession.access_token}` }
+          const [wRes, fRes] = await Promise.all([
+            fetch(`${apiBaseUrl}/workspaces`, { headers }),
+            fetch(`${apiBaseUrl}/floors`, { headers })
+          ])
+          if (wRes.ok && fRes.ok) {
+            const wData = await wRes.json() as WorkspacesResponse
+            const fData = await fRes.json() as FloorsResponse
+            const workspaceItems = wData.items || []
+            const floorItems = fData.items || []
+            setWorkspaces(workspaceItems)
+            setFloors(floorItems)
+            setSelectedId(workspaceItems[0]?.id ?? null)
+          } else {
+            const message = !wRes.ok ? await readApiError(wRes, t("qr.loadFailed")) : await readApiError(fRes, t("qr.loadFailed"))
+            setLoadError(message)
+            toast({ title: t("qr.loadFailed"), description: message, variant: "error" })
+          }
+        } catch {
+          setLoadError(t("qr.networkError"))
+          toast({ title: t("qr.loadFailed"), description: t("qr.networkError"), variant: "error" })
         }
       }
       setLoading(false)
-    }
-    bootstrap()
-  }, [apiBaseUrl])
+  }, [apiBaseUrl, t, toast])
+
+  React.useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      void loadData()
+    }, 0)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadData])
 
   const selectedWorkspace = React.useMemo(() => workspaces.find(w => w.id === selectedId), [workspaces, selectedId])
 
@@ -110,7 +131,16 @@ export default function WorkspaceQrPage() {
     }
   }
 
-  if (loading) return null
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
+          <Loader2 className="h-12 w-12 animate-spin text-primary-500 opacity-50" />
+          <p className="text-sm font-bold text-slate-500">{t("qr.loading")}</p>
+        </div>
+      </DashboardLayout>
+    )
+  }
 
   return (
     <DashboardLayout>
@@ -125,6 +155,39 @@ export default function WorkspaceQrPage() {
             {t("qr.bulkExport")}
           </Button>
         </div>
+
+        {loadError ? (
+          <Card className="glass-panel border-rose-500/20 bg-rose-500/10">
+            <CardContent className="flex flex-col items-center justify-center gap-4 p-10 text-center">
+              <AlertCircle className="text-rose-400" size={48} />
+              <div>
+                <h2 className="text-2xl font-black text-white">{t("qr.loadFailed")}</h2>
+                <p className="mt-2 max-w-xl text-sm font-medium text-slate-400">{loadError}</p>
+              </div>
+              <Button className="bg-primary-600 font-bold hover:bg-primary-700" onClick={() => void loadData()}>
+                {t("qr.retry")}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : workspaces.length === 0 ? (
+          <Card className="glass-panel border-dashed border-white/10">
+            <CardContent className="flex flex-col items-center justify-center gap-5 p-12 text-center">
+              <div className="flex h-20 w-20 items-center justify-center rounded-3xl bg-primary-500/10 text-primary-400">
+                <QrCode size={44} />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white">{t("qr.emptyTitle")}</h2>
+                <p className="mt-2 max-w-xl text-sm font-medium leading-relaxed text-slate-400">{t("qr.emptyDescription")}</p>
+              </div>
+              <Button asChild className="bg-primary-600 font-black hover:bg-primary-700">
+                <Link href="/admin/setup">
+                  <Settings2 className="mr-2" size={18} />
+                  {t("qr.openAdminSetup")}
+                </Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <section className="lg:col-span-2 space-y-6">
@@ -245,7 +308,7 @@ export default function WorkspaceQrPage() {
                         </Button>
                         <Button onClick={handleCopy} variant="outline" className="h-14 rounded-2xl border-white/10 hover:bg-white/10 gap-3 font-bold">
                           {copySuccess ? <CheckCircle2 className="text-emerald-500" size={20} /> : <Copy size={20} />}
-                          {copySuccess ? t("qr.copied") : t("qr.copy")}
+                  {copySuccess ? t("qr.copied") : t("qr.copy")}
                         </Button>
                       </div>
                     </CardContent>
@@ -276,6 +339,7 @@ export default function WorkspaceQrPage() {
             </AnimatePresence>
           </aside>
         </div>
+        )}
       </div>
     </DashboardLayout>
   )

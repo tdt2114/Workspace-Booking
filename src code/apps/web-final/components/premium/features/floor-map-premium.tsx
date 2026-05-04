@@ -7,9 +7,11 @@ import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
+import { readApiError } from "@/lib/http-feedback"
 import { Button } from "@/components/premium/ui/button"
 import { Card } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useToast } from "@/components/premium/ui/toast"
 import { useLanguage } from "@/components/premium/language-provider"
 import { cn } from "@/lib/utils"
 
@@ -68,10 +70,6 @@ interface FloorStateResponse {
   items: BookingRecord[]
 }
 
-interface BookingResponse {
-  message?: string
-}
-
 const statusStyleMap: Record<FloorMapStatus, { fill: string; stroke: string; glow: string }> = {
   available: { fill: "rgba(16, 185, 129, 0.1)", stroke: "rgba(16, 185, 129, 0.5)", glow: "rgba(16, 185, 129, 0.2)" },
   maintenance: { fill: "rgba(245, 158, 11, 0.1)", stroke: "rgba(245, 158, 11, 0.5)", glow: "rgba(245, 158, 11, 0.2)" },
@@ -99,6 +97,7 @@ function buildDefaultTimeWindow() {
 
 export function FloorMapPremium() {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const router = useRouter()
   const [session, setSession] = React.useState<Session | null>(null)
   const [buildings, setBuildings] = React.useState<BuildingRecord[]>([])
@@ -131,6 +130,7 @@ export function FloorMapPremium() {
   const selectedFloor = React.useMemo(() => floors.find(f => f.id === selectedFloorId), [floors, selectedFloorId])
   const filteredWorkspaces = React.useMemo(() => workspaces.filter(w => w.floor_id === selectedFloorId), [workspaces, selectedFloorId])
   const selectedWorkspace = React.useMemo(() => filteredWorkspaces.find(w => w.id === selectedWorkspaceId), [filteredWorkspaces, selectedWorkspaceId])
+  const currentStep = !selectedBuildingId ? 1 : success ? 4 : selectedWorkspaceId ? 3 : 2
 
   const getBuildingStats = React.useCallback((buildingId: string) => {
     const buildingFloors = floors.filter(floor => floor.building_id === buildingId)
@@ -190,6 +190,12 @@ export function FloorMapPremium() {
     setSuccess(null)
     updateSelectionUrl(selectedBuildingId, floorId)
   }, [selectedBuildingId, updateSelectionUrl])
+
+  const handleBookAnother = React.useCallback(() => {
+    setSelectedWorkspaceId(null)
+    setError(null)
+    setSuccess(null)
+  }, [])
 
   // --- Data Fetching ---
   React.useEffect(() => {
@@ -371,16 +377,30 @@ export function FloorMapPremium() {
         })
       })
 
-        const data = await res.json() as BookingResponse
         if (res.ok) {
           setSuccess(t("floorMap.reservedSuccess"))
+          toast({
+            title: t("floorMap.reservedSuccess"),
+            description: selectedWorkspace.name,
+            variant: "success",
+          })
           void fetchFloorState()
-          setTimeout(() => setSelectedWorkspaceId(null), 2000)
         } else {
-          setError(data.message || t("floorMap.createFailed"))
+          const message = await readApiError(res, t("floorMap.createFailed"))
+          setError(message)
+          toast({
+            title: t("floorMap.createFailed"),
+            description: message,
+            variant: "error",
+          })
         }
     } catch {
       setError(t("floorMap.unexpectedError"))
+      toast({
+        title: t("floorMap.createFailed"),
+        description: t("floorMap.unexpectedError"),
+        variant: "error",
+      })
     } finally {
       setBookingLoading(false)
     }
@@ -395,6 +415,8 @@ export function FloorMapPremium() {
   if (!selectedBuildingId) {
     return (
       <div className="flex flex-col h-full space-y-8" data-testid="floor-map-location-step">
+        <BookingStepIndicator currentStep={currentStep} />
+
         <div className="space-y-3">
           <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/20 bg-primary-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-primary-400">
             <Building size={14} />
@@ -480,6 +502,8 @@ export function FloorMapPremium() {
 
   return (
     <div className="flex flex-col h-full space-y-6" data-testid="floor-map-shell">
+      <BookingStepIndicator currentStep={currentStep} />
+
       {/* Filters Bar */}
       <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center">
         <button
@@ -581,14 +605,17 @@ export function FloorMapPremium() {
         <AnimatePresence>
           {selectedWorkspaceId && (
             <motion.div
-              initial={{ x: 350, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 350, opacity: 0 }}
-              className="w-full shrink-0 lg:w-80"
+              initial={{ y: 32, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 32, opacity: 0 }}
+              className="fixed inset-x-0 bottom-0 z-[80] max-h-[86dvh] shrink-0 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:static lg:z-auto lg:max-h-none lg:w-80 lg:overflow-visible lg:px-0 lg:pb-0"
             >
-              <Card className="flex flex-col overflow-hidden border-white/10 glass-panel lg:h-full">
+              <Card className="flex flex-col overflow-hidden rounded-t-[2rem] border-white/10 glass-panel shadow-2xl shadow-black/50 lg:h-full lg:rounded-[1.5rem] lg:shadow-none">
                 <div className="flex items-center justify-between border-b border-white/5 bg-primary-500/5 p-5 sm:p-6">
-                  <h3 className="text-xl font-bold text-white">{t("floorMap.bookingDetails")}</h3>
+                  <div className="space-y-2">
+                    <div className="mx-auto h-1.5 w-14 rounded-full bg-white/15 lg:hidden" />
+                    <h3 className="text-xl font-bold text-white">{success ? t("floorMap.bookingConfirmed") : t("floorMap.bookingDetails")}</h3>
+                  </div>
                   <Button variant="ghost" size="icon" onClick={() => setSelectedWorkspaceId(null)} className="text-slate-500 hover:text-white">
                     <ChevronRight />
                   </Button>
@@ -647,27 +674,89 @@ export function FloorMapPremium() {
                     </motion.div>
                   )}
                   {success && (
-                    <motion.div data-testid="floor-map-booking-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 text-sm flex gap-3">
+                    <motion.div data-testid="floor-map-booking-success" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-4 text-sm text-emerald-500">
+                      <div className="flex gap-3">
                       <CheckCircle2 size={18} className="shrink-0" />
                       <p>{success}</p>
+                      </div>
+                      <p className="text-xs font-medium leading-relaxed text-slate-400">{t("floorMap.afterBookingHint")}</p>
                     </motion.div>
                   )}
                 </div>
 
-                <div className="sticky bottom-0 border-t border-white/5 bg-[#111722]/95 p-5 pb-28 backdrop-blur sm:p-6 sm:pb-28 lg:static lg:bg-white/5 lg:pb-6 lg:backdrop-blur-0">
-                  <Button 
-                    data-testid="floor-map-create-booking"
-                    className="w-full bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
-                    onClick={handleBooking}
-                    disabled={bookingLoading}
-                  >
-                    {bookingLoading ? t("floorMap.processing") : t("floorMap.confirmBooking")}
-                  </Button>
+                <div className="sticky bottom-0 border-t border-white/5 bg-[#111722]/95 p-5 backdrop-blur sm:p-6 lg:static lg:bg-white/5 lg:backdrop-blur-0">
+                  {success ? (
+                    <div className="grid gap-3">
+                      <Button className="h-12 w-full bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => router.push("/bookings")}>
+                        {t("floorMap.viewMyBookings")}
+                      </Button>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1">
+                        <Button variant="secondary" className="h-11 font-bold" onClick={handleBookAnother}>
+                          {t("floorMap.bookAnother")}
+                        </Button>
+                        <Button variant="outline" className="h-11 font-bold" onClick={() => router.push("/check-in")}>
+                          {t("floorMap.goCheckIn")}
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button 
+                      data-testid="floor-map-create-booking"
+                      className="w-full bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+                      onClick={handleBooking}
+                      isLoading={bookingLoading}
+                      loadingText={t("floorMap.processing")}
+                    >
+                      {t("floorMap.confirmBooking")}
+                    </Button>
+                  )}
                 </div>
               </Card>
             </motion.div>
           )}
         </AnimatePresence>
+      </div>
+    </div>
+  )
+}
+
+function BookingStepIndicator({ currentStep }: { currentStep: number }) {
+  const { t } = useLanguage()
+  const steps = [
+    t("floorMap.steps.location"),
+    t("floorMap.steps.schedule"),
+    t("floorMap.steps.workspace"),
+    t("floorMap.steps.confirm"),
+  ]
+
+  return (
+    <div className="rounded-[1.5rem] border border-white/5 bg-white/[0.03] p-3">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+        {steps.map((label, index) => {
+          const stepNumber = index + 1
+          const isActive = currentStep === stepNumber
+          const isDone = currentStep > stepNumber
+
+          return (
+            <div
+              key={label}
+              className={cn(
+                "flex items-center gap-3 rounded-2xl border px-3 py-3 transition-all",
+                isActive ? "border-primary-500/40 bg-primary-500/10 text-white" : "border-white/5 bg-white/[0.02] text-slate-500",
+                isDone ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" : "",
+              )}
+            >
+              <div className={cn(
+                "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black",
+                isActive ? "bg-primary-600 text-white" : "bg-white/10 text-slate-400",
+                isDone ? "bg-emerald-500 text-white" : "",
+              )}>
+                {isDone ? <CheckCircle2 size={15} /> : stepNumber}
+              </div>
+              <span className="text-[10px] font-black uppercase tracking-widest sm:text-xs">{label}</span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

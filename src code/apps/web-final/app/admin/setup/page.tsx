@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info } from "lucide-react"
+import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
@@ -11,7 +11,9 @@ import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
+import { useToast } from "@/components/premium/ui/toast"
 import { useLanguage } from "@/components/premium/language-provider"
+import { readApiError } from "@/lib/http-feedback"
 import { cn } from "@/lib/utils"
 
 // --- Types ---
@@ -81,14 +83,24 @@ interface WorkspaceManagerProps {
 
 interface SvgMapperProps {
   floors: Floor[]
+  onRefresh: () => Promise<void>
   apiBaseUrl: string
   token: string
+}
+
+interface SetupGuideProps {
+  buildings: Building[]
+  floors: Floor[]
+  workspaces: Workspace[]
+  activeTab: Tab
+  onSelectTab: (tab: Tab) => void
 }
 
 // --- Main Component ---
 export default function AdminSetupPage() {
   const router = useRouter()
   const { t } = useLanguage()
+  const { toast } = useToast()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<Tab>("buildings")
@@ -122,10 +134,11 @@ export default function AdminSetupPage() {
       }
     } catch {
       setError(t("admin.loadFailed"))
+      toast({ title: t("admin.loadFailed"), variant: "error" })
     } finally {
       setLoading(false)
     }
-  }, [apiBaseUrl, t])
+  }, [apiBaseUrl, t, toast])
 
   // Auth & Initial Data
   React.useEffect(() => {
@@ -166,6 +179,14 @@ export default function AdminSetupPage() {
           </motion.div>
         )}
 
+        <SetupGuide
+          buildings={buildings}
+          floors={floors}
+          workspaces={workspaces}
+          activeTab={activeTab}
+          onSelectTab={setActiveTab}
+        />
+
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -177,11 +198,95 @@ export default function AdminSetupPage() {
             {activeTab === "buildings" ? (accessToken ? <BuildingManager buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
             {activeTab === "floors" ? (accessToken ? <FloorManager floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
             {activeTab === "workspaces" ? (accessToken ? <WorkspaceManager workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "svg-mapping" ? (accessToken ? <SvgMapper floors={floors} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
+            {activeTab === "svg-mapping" ? (accessToken ? <SvgMapper floors={floors} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
           </motion.div>
         </AnimatePresence>
       </div>
     </DashboardLayout>
+  )
+}
+
+function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: SetupGuideProps) {
+  const { t } = useLanguage()
+  const hasBuilding = buildings.length > 0
+  const hasFloor = floors.length > 0
+  const hasSvg = floors.some((floor) => Boolean(floor.svg_map_url))
+  const hasWorkspace = workspaces.length > 0
+  const mappedFloorIds = new Set(floors.filter((floor) => floor.svg_map_url).map((floor) => floor.id))
+  const hasMappedWorkspace = workspaces.some((workspace) => workspace.svg_element_id)
+  const hasBookableMappedWorkspace = workspaces.some((workspace) => mappedFloorIds.has(workspace.floor_id) && workspace.svg_element_id)
+  const steps: Array<{ key: Tab; label: string; description: string; done: boolean }> = [
+    { key: "buildings", label: t("admin.guide.building"), description: t("admin.guide.buildingDesc"), done: hasBuilding },
+    { key: "floors", label: t("admin.guide.floor"), description: t("admin.guide.floorDesc"), done: hasFloor },
+    { key: "svg-mapping", label: t("admin.guide.svg"), description: t("admin.guide.svgDesc"), done: hasSvg },
+    { key: "svg-mapping", label: tFallback(t, "admin.guide.mapping", "Map SVG IDs"), description: tFallback(t, "admin.guide.mappingDesc", "Review SVG element IDs and copy the correct ID for each desk or room."), done: hasMappedWorkspace },
+    { key: "workspaces", label: t("admin.guide.workspace"), description: t("admin.guide.workspaceDesc"), done: hasWorkspace && hasBookableMappedWorkspace },
+  ]
+  const nextStep = steps.find((step) => !step.done) ?? null
+  const completedCount = steps.filter((step) => step.done).length
+
+  return (
+    <Card className="glass-panel overflow-hidden border-primary-500/20 bg-primary-500/5">
+      <CardContent className="p-5 sm:p-6">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/20 bg-primary-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-primary-300">
+              <CircleDot size={14} />
+              {t("admin.guide.title")}
+            </div>
+            <h2 className="text-2xl font-black text-white">{t("admin.guide.heading")}</h2>
+            <p className="max-w-2xl text-sm font-medium leading-relaxed text-slate-400">
+              {nextStep ? t("admin.guide.nextStep").replace("{step}", nextStep.label) : t("admin.guide.completed")}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="text-right">
+              <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("admin.guide.progress")}</p>
+              <p className="text-2xl font-black text-white">{completedCount}/5</p>
+            </div>
+            <Button
+              className="h-11 rounded-xl bg-primary-600 px-5 font-black hover:bg-primary-700"
+              onClick={() => onSelectTab((nextStep?.key ?? "workspaces"))}
+            >
+              {nextStep ? t("admin.guide.continue") : t("admin.tabs.workspaces")}
+            </Button>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+          {steps.map((step, index) => {
+            const isActive = activeTab === step.key
+
+            return (
+              <button
+                key={`${step.key}-${index}`}
+                type="button"
+                onClick={() => onSelectTab(step.key)}
+                className={cn(
+                  "rounded-2xl border p-4 text-left transition-all",
+                  step.done ? "border-emerald-500/20 bg-emerald-500/10" : "border-white/5 bg-white/[0.03]",
+                  isActive ? "ring-2 ring-primary-500/50" : "hover:border-primary-500/30",
+                )}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black",
+                    step.done ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-400",
+                  )}>
+                    {step.done ? <CheckCircle2 size={18} /> : index + 1}
+                  </div>
+                  <div className="space-y-1">
+                    <p className="text-sm font-black text-white">{step.label}</p>
+                    <p className="text-xs font-medium leading-relaxed text-slate-400">{step.description}</p>
+                  </div>
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -200,15 +305,39 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
   )
 }
 
+function FieldError({ show, children }: { show: boolean; children: React.ReactNode }) {
+  if (!show) return null
+
+  return (
+    <p className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+      <AlertCircle size={13} />
+      {children}
+    </p>
+  )
+}
+
+function tFallback(t: (path: string) => string, path: string, fallback: string) {
+  const value = t(path)
+  return value === path ? fallback : value
+}
+
 // --- Specialized Managers ---
 
 function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingManagerProps) {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
+  const [submitted, setSubmitted] = React.useState(false)
   const [form, setForm] = React.useState({ name: "", address: "", totalFloors: 1, openTime: "08:00", closeTime: "18:00" })
+  const isValid = Boolean(form.name.trim()) && Number.isFinite(form.totalFloors) && form.totalFloors > 0 && Boolean(form.openTime) && Boolean(form.closeTime)
 
   const handleCreate = async () => {
     if (!token) return
+    setSubmitted(true)
+    if (!isValid) {
+      toast({ title: tFallback(t, "admin.validationTitle", "Check the form"), description: tFallback(t, "admin.fixValidation", "Some required information is missing or invalid."), variant: "error" })
+      return
+    }
     setIsSaving(true)
     try {
       const res = await fetch(`${apiBaseUrl}/buildings`, {
@@ -218,8 +347,15 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
       })
       if (res.ok) {
         await onRefresh()
+        setSubmitted(false)
         setForm({ name: "", address: "", totalFloors: 1, openTime: "08:00", closeTime: "18:00" })
+        toast({ title: t("admin.createSuccess"), description: t("admin.buildingCreated"), variant: "success" })
+      } else {
+        const message = await readApiError(res, t("admin.createFailed"))
+        toast({ title: t("admin.createFailed"), description: message, variant: "error" })
       }
+    } catch {
+      toast({ title: t("admin.createFailed"), description: t("admin.networkError"), variant: "error" })
     } finally { setIsSaving(false) }
   }
 
@@ -267,6 +403,7 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.buildingName")}</label>
             <Input placeholder={t("admin.buildingPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+            <FieldError show={submitted && !form.name.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.address")}</label>
@@ -275,19 +412,22 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.totalFloors")}</label>
             <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.totalFloors} onChange={e => setForm({...form, totalFloors: parseInt(e.target.value)})} />
+            <FieldError show={submitted && (!Number.isFinite(form.totalFloors) || form.totalFloors < 1)}>{tFallback(t, "admin.validation.positiveNumber", "Enter a number greater than zero.")}</FieldError>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.openTime")}</label>
               <Input type="time" className="bg-white/5 border-white/10 h-12 rounded-xl [color-scheme:dark]" value={form.openTime} onChange={e => setForm({...form, openTime: e.target.value})} />
+              <FieldError show={submitted && !form.openTime}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
             </div>
             <div className="space-y-2">
               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.closeTime")}</label>
               <Input type="time" className="bg-white/5 border-white/10 h-12 rounded-xl [color-scheme:dark]" value={form.closeTime} onChange={e => setForm({...form, closeTime: e.target.value})} />
+              <FieldError show={submitted && !form.closeTime}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
             </div>
           </div>
-          <Button className="w-full mt-4 bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20" onClick={handleCreate} disabled={isSaving}>
-            {isSaving ? t("admin.saving") : <><Save className="mr-2" size={20} /> {t("admin.createBuilding")}</>}
+          <Button className="w-full mt-4 bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20" onClick={handleCreate} isLoading={isSaving} loadingText={t("admin.saving")}>
+            <Save className="mr-2" size={20} /> {t("admin.createBuilding")}
           </Button>
         </CardContent>
       </Card>
@@ -297,16 +437,24 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
 
 function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: FloorManagerProps) {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
+  const [submitted, setSubmitted] = React.useState(false)
   const [form, setForm] = React.useState({
     buildingId: buildings[0]?.id ?? "",
     floorNumber: 1,
     name: "",
   })
   const effectiveBuildingId = form.buildingId || buildings[0]?.id || ""
+  const isValid = Boolean(effectiveBuildingId) && Number.isFinite(form.floorNumber) && form.floorNumber > 0
 
   const handleCreate = async () => {
     if (!token || !effectiveBuildingId) return
+    setSubmitted(true)
+    if (!isValid) {
+      toast({ title: tFallback(t, "admin.validationTitle", "Check the form"), description: tFallback(t, "admin.fixValidation", "Some required information is missing or invalid."), variant: "error" })
+      return
+    }
     setIsSaving(true)
     try {
       const res = await fetch(`${apiBaseUrl}/floors`, {
@@ -321,8 +469,15 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
 
       if (res.ok) {
         await onRefresh()
+        setSubmitted(false)
         setForm((current) => ({ ...current, floorNumber: current.floorNumber + 1, name: "" }))
+        toast({ title: t("admin.createSuccess"), description: t("admin.floorCreated"), variant: "success" })
+      } else {
+        const message = await readApiError(res, t("admin.createFailed"))
+        toast({ title: t("admin.createFailed"), description: message, variant: "error" })
       }
+    } catch {
+      toast({ title: t("admin.createFailed"), description: t("admin.networkError"), variant: "error" })
     } finally {
       setIsSaving(false)
     }
@@ -383,13 +538,14 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.floorNumber")}</label>
                 <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.floorNumber} onChange={(e) => setForm({ ...form, floorNumber: parseInt(e.target.value) })} />
+                <FieldError show={submitted && (!Number.isFinite(form.floorNumber) || form.floorNumber < 1)}>{tFallback(t, "admin.validation.positiveNumber", "Enter a number greater than zero.")}</FieldError>
               </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.floorName")}</label>
                 <Input placeholder={t("admin.floorNamePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
-              <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleCreate} disabled={isSaving || !effectiveBuildingId}>
-                {isSaving ? t("admin.saving") : t("admin.createFloor")}
+              <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleCreate} disabled={!effectiveBuildingId} isLoading={isSaving} loadingText={t("admin.saving")}>
+                {t("admin.createFloor")}
               </Button>
             </>
           ) : (
@@ -406,7 +562,11 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
 
 function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl, token }: WorkspaceManagerProps) {
   const { t } = useLanguage()
+  const router = useRouter()
+  const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
+  const [submitted, setSubmitted] = React.useState(false)
+  const [lastCreated, setLastCreated] = React.useState<{ name: string; floorId: string } | null>(null)
   const [form, setForm] = React.useState({
     floorId: floors[0]?.id ?? "",
     name: "",
@@ -417,6 +577,7 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
     capacity: 1,
   })
   const effectiveFloorId = form.floorId || floors[0]?.id || ""
+  const isValid = Boolean(effectiveFloorId) && Boolean(form.name.trim()) && Boolean(form.svgElementId.trim()) && Boolean(form.qrCodeValue.trim()) && Number.isFinite(form.capacity) && form.capacity > 0
 
   const describeFloor = React.useCallback((floor: Floor) => {
     const building = buildings.find((item) => item.id === floor.building_id)
@@ -426,7 +587,12 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
   }, [buildings, t])
 
   const handleCreate = async () => {
-    if (!token || !effectiveFloorId || !form.name || !form.svgElementId || !form.qrCodeValue) return
+    if (!token || !effectiveFloorId) return
+    setSubmitted(true)
+    if (!isValid) {
+      toast({ title: tFallback(t, "admin.validationTitle", "Check the form"), description: tFallback(t, "admin.fixValidation", "Some required information is missing or invalid."), variant: "error" })
+      return
+    }
     setIsSaving(true)
     try {
       const res = await fetch(`${apiBaseUrl}/workspaces`, {
@@ -444,7 +610,11 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
       })
 
       if (res.ok) {
+        const createdName = form.name
+        const createdFloorId = effectiveFloorId
         await onRefresh()
+        setSubmitted(false)
+        setLastCreated({ name: createdName, floorId: createdFloorId })
         setForm((current) => ({
           ...current,
           name: "",
@@ -452,11 +622,25 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
           qrCodeValue: "",
           capacity: 1,
         }))
+        toast({ title: t("admin.createSuccess"), description: t("admin.workspaceCreated"), variant: "success" })
+      } else {
+        const message = await readApiError(res, t("admin.createFailed"))
+        toast({ title: t("admin.createFailed"), description: message, variant: "error" })
       }
+    } catch {
+      toast({ title: t("admin.createFailed"), description: t("admin.networkError"), variant: "error" })
     } finally {
       setIsSaving(false)
     }
   }
+
+  const openLastCreatedOnMap = React.useCallback(() => {
+    if (!lastCreated) return
+    const floor = floors.find((item) => item.id === lastCreated.floorId)
+    const params = new URLSearchParams({ floorId: lastCreated.floorId })
+    if (floor?.building_id) params.set("buildingId", floor.building_id)
+    router.push(`/floor-map?${params.toString()}`)
+  }, [floors, lastCreated, router])
 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
@@ -491,6 +675,21 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
           <CardDescription>{t("admin.levelManagementDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {lastCreated && (
+            <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-400" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-black text-white">{tFallback(t, "admin.workspaceReady", "Workspace created")}</p>
+                  <p className="mt-1 text-xs font-medium text-slate-300">{lastCreated.name}</p>
+                  <Button className="mt-3 h-10 w-full rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={openLastCreatedOnMap}>
+                    <ExternalLink size={16} className="mr-2" />
+                    {tFallback(t, "admin.viewOnFloorMap", "Check on Floor Map")}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.selectFloor")}</label>
             <select
@@ -508,6 +707,7 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceName")}</label>
             <Input placeholder={t("admin.workspaceNamePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <FieldError show={submitted && !form.name.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
@@ -530,21 +730,26 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.svgId")}</label>
             <Input placeholder={t("admin.svgIdPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.svgElementId} onChange={(e) => setForm({ ...form, svgElementId: e.target.value })} />
+            <FieldError show={submitted && !form.svgElementId.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.qrCodeValue")}</label>
             <Input placeholder={t("admin.qrCodePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.qrCodeValue} onChange={(e) => setForm({ ...form, qrCodeValue: e.target.value })} />
+            <FieldError show={submitted && !form.qrCodeValue.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
             <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.capacity")}</label>
             <Input type="number" min={1} max={50} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: parseInt(e.target.value) })} />
+            <FieldError show={submitted && (!Number.isFinite(form.capacity) || form.capacity < 1)}>{tFallback(t, "admin.validation.positiveNumber", "Enter a number greater than zero.")}</FieldError>
           </div>
           <Button
             className="w-full bg-primary-600 hover:bg-primary-700 h-12 font-black"
             onClick={handleCreate}
-            disabled={isSaving || !effectiveFloorId || !form.name || !form.svgElementId || !form.qrCodeValue}
+            disabled={!effectiveFloorId}
+            isLoading={isSaving}
+            loadingText={t("admin.saving")}
           >
-            {isSaving ? t("admin.saving") : <><Plus className="mr-2" size={18} /> {t("admin.createWorkspace")}</>}
+            <Plus className="mr-2" size={18} /> {t("admin.createWorkspace")}
           </Button>
         </CardContent>
       </Card>
@@ -552,11 +757,60 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
   )
 }
 
-function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
+function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
   const { t } = useLanguage()
+  const { toast } = useToast()
   const [selectedFloorId, setSelectedFloorId] = React.useState("")
   const [file, setFile] = React.useState<File | null>(null)
   const [isUploading, setIsUploading] = React.useState(false)
+  const [isLoadingSvg, setIsLoadingSvg] = React.useState(false)
+  const [svgIds, setSvgIds] = React.useState<string[]>([])
+  const selectedFloor = floors.find((floor) => floor.id === selectedFloorId) ?? null
+
+  const loadSvgIds = React.useCallback(async (floorId: string) => {
+    if (!floorId || !token) {
+      setSvgIds([])
+      return
+    }
+
+    const floor = floors.find((item) => item.id === floorId)
+    if (!floor?.svg_map_url) {
+      setSvgIds([])
+      return
+    }
+
+    setIsLoadingSvg(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/floors/${floorId}/svg`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!res.ok) {
+        const message = await readApiError(res, tFallback(t, "admin.svgIdLoadFailed", "Could not read SVG IDs."))
+        toast({ title: tFallback(t, "admin.svgIdLoadFailed", "Could not read SVG IDs."), description: message, variant: "error" })
+        setSvgIds([])
+        return
+      }
+
+      const svgText = await res.text()
+      const ids = Array.from(svgText.matchAll(/\sid=["']([^"']+)["']/g)).map((match) => match[1]).filter(Boolean)
+      setSvgIds(Array.from(new Set(ids)))
+    } catch {
+      toast({ title: tFallback(t, "admin.svgIdLoadFailed", "Could not read SVG IDs."), description: t("admin.networkError"), variant: "error" })
+      setSvgIds([])
+    } finally {
+      setIsLoadingSvg(false)
+    }
+  }, [apiBaseUrl, floors, t, toast, token])
+
+  const copySvgId = async (svgId: string) => {
+    try {
+      await navigator.clipboard.writeText(svgId)
+      toast({ title: tFallback(t, "admin.svgIdCopied", "SVG ID copied."), description: svgId, variant: "success" })
+    } catch {
+      toast({ title: tFallback(t, "admin.copyFailed", "Could not copy SVG ID."), description: svgId, variant: "error" })
+    }
+  }
 
   const handleUpload = async () => {
     if (!selectedFloorId || !file || !token) return
@@ -569,7 +823,17 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
         headers: { Authorization: `Bearer ${token}` },
         body: formData
       })
-      if (res.ok) alert(t("admin.svgUploaded"))
+      if (res.ok) {
+        toast({ title: t("admin.svgUploaded"), variant: "success" })
+        setFile(null)
+        await onRefresh()
+        await loadSvgIds(selectedFloorId)
+      } else {
+        const message = await readApiError(res, t("admin.uploadFailed"))
+        toast({ title: t("admin.uploadFailed"), description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: t("admin.uploadFailed"), description: t("admin.networkError"), variant: "error" })
     } finally { setIsUploading(false) }
   }
 
@@ -580,16 +844,64 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
           <CardTitle>{t("admin.floorMappingVisualizer")}</CardTitle>
           <CardDescription>{t("admin.floorMappingDesc")}</CardDescription>
         </CardHeader>
-        <CardContent className="flex-1 flex items-center justify-center p-12">
-          <div className="text-center space-y-6">
-            <div className="w-24 h-24 rounded-3xl bg-blue-500/10 flex items-center justify-center text-blue-500 mx-auto">
-              <FileCode size={48} />
+        <CardContent className="flex-1 p-6 sm:p-8">
+          {!selectedFloorId ? (
+            <div className="flex min-h-[460px] items-center justify-center text-center">
+              <div className="space-y-6">
+                <div className="w-24 h-24 rounded-3xl bg-blue-500/10 flex items-center justify-center text-blue-500 mx-auto">
+                  <FileCode size={48} />
+                </div>
+                <div className="space-y-2">
+                  <h4 className="text-xl font-bold text-white">{t("admin.mappingConsole")}</h4>
+                  <p className="text-slate-500 max-w-md">{t("admin.mappingConsoleDesc")}</p>
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <h4 className="text-xl font-bold text-white">{t("admin.mappingConsole")}</h4>
-              <p className="text-slate-500 max-w-md">{t("admin.mappingConsoleDesc")}</p>
+          ) : !selectedFloor?.svg_map_url ? (
+            <div className="flex min-h-[460px] items-center justify-center text-center">
+              <div className="max-w-md space-y-4">
+                <Upload size={48} className="mx-auto text-amber-400" />
+                <h4 className="text-xl font-black text-white">{tFallback(t, "admin.svgRequiredTitle", "Upload an SVG map first")}</h4>
+                <p className="text-sm font-medium leading-relaxed text-slate-400">{tFallback(t, "admin.svgRequiredDesc", "This floor does not have an SVG map yet. Upload the map on the right, then copy the detected element IDs into workspace setup.")}</p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="space-y-5">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <h4 className="text-xl font-black text-white">{tFallback(t, "admin.detectedSvgIds", "Detected SVG IDs")}</h4>
+                  <p className="text-sm font-medium text-slate-400">{tFallback(t, "admin.detectedSvgIdsDesc", "Click any ID to copy it, then paste it into the workspace SVG ID field.")}</p>
+                </div>
+                <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-slate-300">
+                  {svgIds.length} {tFallback(t, "admin.idsFound", "IDs found")}
+                </div>
+              </div>
+
+              {isLoadingSvg ? (
+                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-8 text-center text-sm font-bold text-slate-400">
+                  {tFallback(t, "admin.loadingSvgIds", "Reading SVG IDs...")}
+                </div>
+              ) : svgIds.length > 0 ? (
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {svgIds.map((svgId) => (
+                    <button
+                      key={svgId}
+                      type="button"
+                      onClick={() => copySvgId(svgId)}
+                      className="group flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/[0.04] p-4 text-left transition-all hover:border-primary-500/30 hover:bg-primary-500/10"
+                    >
+                      <span className="min-w-0 truncate font-mono text-sm font-bold text-white">{svgId}</span>
+                      <Copy size={16} className="shrink-0 text-slate-500 transition-colors group-hover:text-primary-400" />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-2xl border border-amber-500/20 bg-amber-500/10 p-6 text-sm font-medium text-amber-100">
+                  {tFallback(t, "admin.noSvgIdsFound", "No SVG IDs were found. Add id attributes to desk/room elements in the SVG file.")}
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -601,7 +913,15 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
           <CardContent className="space-y-4">
              <div className="space-y-2">
                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.targetFloor")}</label>
-               <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none" onChange={e => setSelectedFloorId(e.target.value)} value={selectedFloorId}>
+               <select
+                 className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none"
+                 onChange={(e) => {
+                   const nextFloorId = e.target.value
+                   setSelectedFloorId(nextFloorId)
+                   void loadSvgIds(nextFloorId)
+                 }}
+                 value={selectedFloorId}
+               >
                   <option value="">{t("admin.selectFloor")}</option>
                   {floors.map((f) => (
                     <option key={f.id} value={f.id} className="bg-slate-900 text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</option>
@@ -616,8 +936,8 @@ function SvgMapper({ floors, apiBaseUrl, token }: SvgMapperProps) {
                   <p className="text-xs text-slate-500 font-bold">{file ? file.name : t("admin.chooseSvg")}</p>
                </div>
              </div>
-             <Button className="w-full mt-4 bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleUpload} disabled={isUploading || !file}>
-               {isUploading ? t("admin.uploading") : t("admin.syncAssets")}
+             <Button className="w-full mt-4 bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleUpload} disabled={!file || !selectedFloorId} isLoading={isUploading} loadingText={t("admin.uploading")}>
+               {t("admin.syncAssets")}
              </Button>
           </CardContent>
         </Card>
