@@ -189,7 +189,7 @@ export class BookingsService {
       throw new BadRequestException('Only available workspaces can be booked');
     }
 
-    await this.releaseExpiredBookings(now);
+    await this.tryReleaseExpiredBookings(now);
 
     const activeBookingCount = await this.countActiveBookingsForUser(
       user.id,
@@ -544,13 +544,32 @@ export class BookingsService {
     await this.runCompleted(lifecycleDto);
   }
 
+  private async tryReleaseExpiredBookings(effectiveAt: Date) {
+    try {
+      await this.releaseExpiredBookings(effectiveAt);
+    } catch (error) {
+      // Lifecycle cleanup is opportunistic before create; do not block booking
+      // creation with a generic 500 if cleanup temporarily fails.
+      console.warn('Booking lifecycle cleanup failed before create', error);
+    }
+  }
+
   private handleWriteError(
     error: {
       code?: string;
       message: string;
+      details?: string;
+      hint?: string;
     } | null,
     fallbackMessage: string,
   ): never {
+    console.warn('Booking write failed', {
+      code: error?.code,
+      message: error?.message,
+      details: error?.details,
+      hint: error?.hint,
+    });
+
     if (error?.code === '23P01') {
       throw new ConflictException(
         'Workspace is already booked for the selected time range',

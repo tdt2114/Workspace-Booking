@@ -1,6 +1,8 @@
 insert into public.buildings (name, address, total_floors, open_time, close_time)
-values ('Head Office', 'Bangkok', 1, '08:00', '18:00')
-on conflict do nothing;
+select 'Head Office', 'Bangkok', 1, '08:00', '18:00'
+where not exists (
+  select 1 from public.buildings where name = 'Head Office'
+);
 
 with b as (
   select id from public.buildings where name = 'Head Office' limit 1

@@ -66,6 +66,14 @@ function isAllowedOrigin(origin: string) {
       return DEV_FRONTEND_PORTS.has(parsedOrigin.port);
     }
 
+    if (
+      process.env.NODE_ENV !== 'production' &&
+      parsedOrigin.protocol === 'https:' &&
+      parsedOrigin.hostname.endsWith('.trycloudflare.com')
+    ) {
+      return true;
+    }
+
     return false;
   } catch {
     return false;

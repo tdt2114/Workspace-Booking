@@ -10,7 +10,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
-    coalesce(new.raw_user_meta_data->>'role', 'employee')
+    'employee'
   )
   on conflict (id) do update
   set
@@ -40,20 +40,19 @@ using (
 );
 
 drop policy if exists "users_update_own_or_admin" on public.users;
-create policy "users_update_own_or_admin"
+drop policy if exists "users_update_admin_only" on public.users;
+create policy "users_update_admin_only"
 on public.users
 for update
 to authenticated
 using (
-  auth.uid() = id
-  or exists (
+  exists (
     select 1 from public.users u
     where u.id = auth.uid() and u.role = 'admin'
   )
 )
 with check (
-  auth.uid() = id
-  or exists (
+  exists (
     select 1 from public.users u
     where u.id = auth.uid() and u.role = 'admin'
   )

@@ -32,6 +32,8 @@ interface CheckInResponse {
   message?: string
 }
 
+type Html5QrcodeModule = typeof import("html5-qrcode")
+
 function findActiveCheckedInBooking(bookings: Booking[]) {
   const now = Date.now()
 
@@ -62,6 +64,7 @@ export default function CheckInPage() {
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const scannerContainerRef = React.useRef<HTMLDivElement | null>(null)
   const html5QrcodeRef = React.useRef<Html5Qrcode | null>(null)
+  const scannerModulePromiseRef = React.useRef<Promise<Html5QrcodeModule> | null>(null)
   const hasDecodedRef = React.useRef(false)
   
   const [session, setSession] = React.useState<Session | null>(null)
@@ -87,6 +90,11 @@ export default function CheckInPage() {
     setManual(true)
     setErrorMessage(message)
     setStatus("error")
+  }, [])
+
+  const loadScannerModule = React.useCallback(() => {
+    scannerModulePromiseRef.current ??= import("html5-qrcode")
+    return scannerModulePromiseRef.current
   }, [])
 
   // --- Auth & Initial Data ---
@@ -122,6 +130,18 @@ export default function CheckInPage() {
     }
     bootstrap()
   }, [apiBaseUrl, router])
+
+  React.useEffect(() => {
+    if (typeof window === "undefined" || !window.isSecureContext) {
+      return
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      void loadScannerModule()
+    }, 250)
+
+    return () => window.clearTimeout(timeoutId)
+  }, [loadScannerModule])
 
   // --- QR Scanner Setup ---
   const handleCheckIn = React.useCallback(async (value: string) => {
@@ -227,7 +247,7 @@ export default function CheckInPage() {
       }
 
       try {
-        const { Html5Qrcode } = await import("html5-qrcode")
+        const { Html5Qrcode } = await loadScannerModule()
         const scanner = new Html5Qrcode(container.id)
         html5QrcodeRef.current = scanner
 
@@ -277,7 +297,7 @@ export default function CheckInPage() {
       setIsScannerStarting(false)
       void stopScanner()
     }
-  }, [enableManualFallback, handleCheckIn, status, stopScanner, t])
+  }, [enableManualFallback, handleCheckIn, loadScannerModule, status, stopScanner, t])
 
   React.useEffect(() => {
     return () => {

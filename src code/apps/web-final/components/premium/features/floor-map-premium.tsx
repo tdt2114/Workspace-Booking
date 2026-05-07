@@ -604,14 +604,22 @@ export function FloorMapPremium() {
         {/* Sidebar Selection Panel */}
         <AnimatePresence>
           {selectedWorkspaceId && (
-            <motion.div
-              initial={{ y: 32, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 32, opacity: 0 }}
-              className="fixed inset-x-0 bottom-0 z-[80] max-h-[86dvh] shrink-0 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:static lg:z-auto lg:max-h-none lg:w-80 lg:overflow-visible lg:px-0 lg:pb-0"
-            >
-              <Card className="flex flex-col overflow-hidden rounded-t-[2rem] border-white/10 glass-panel shadow-2xl shadow-black/50 lg:h-full lg:rounded-[1.5rem] lg:shadow-none">
-                <div className="flex items-center justify-between border-b border-white/5 bg-primary-500/5 p-5 sm:p-6">
+            <>
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="fixed inset-0 z-[70] bg-slate-950/45 backdrop-blur-[2px] lg:hidden"
+                onClick={() => setSelectedWorkspaceId(null)}
+              />
+              <motion.div
+                initial={{ y: 32, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 32, opacity: 0 }}
+                className="fixed inset-x-0 bottom-0 z-[80] max-h-[86dvh] shrink-0 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:static lg:z-auto lg:max-h-none lg:w-80 lg:overflow-visible lg:px-0 lg:pb-0"
+              >
+              <Card className="booking-sheet-panel flex flex-col overflow-hidden rounded-t-[2rem] shadow-2xl shadow-black/50 lg:h-full lg:rounded-[1.5rem] lg:shadow-none">
+                <div className="booking-sheet-header flex items-center justify-between p-5 sm:p-6">
                   <div className="space-y-2">
                     <div className="mx-auto h-1.5 w-14 rounded-full bg-white/15 lg:hidden" />
                     <h3 className="text-xl font-bold text-white">{success ? t("floorMap.bookingConfirmed") : t("floorMap.bookingDetails")}</h3>
@@ -623,8 +631,8 @@ export function FloorMapPremium() {
                 
                 <div className="flex-1 space-y-6 p-5 sm:space-y-8 sm:p-6">
                   <div className="space-y-4">
-                    <div className="w-full aspect-video rounded-2xl bg-gradient-to-br from-blue-600/20 to-primary-600/20 flex items-center justify-center border border-primary-500/10">
-                      <Layers size={48} className="text-primary-500 opacity-50" />
+                    <div className="booking-sheet-preview flex aspect-video w-full items-center justify-center rounded-2xl">
+                      <Layers size={48} className="text-primary-500 opacity-90" />
                     </div>
                     <div>
                       <h4 data-testid="floor-map-selected-workspace-name" className="text-2xl font-black text-white break-words">{selectedWorkspace?.name}</h4>
@@ -645,7 +653,7 @@ export function FloorMapPremium() {
                         <Input 
                           data-testid="floor-map-booking-start"
                           type="datetime-local" 
-                          className="pl-12 bg-white/5 border-white/10 h-12 rounded-xl focus:border-primary-500 transition-all text-white [color-scheme:dark]"
+                          className="booking-sheet-input h-12 rounded-xl pl-12 transition-all focus:border-primary-500"
                           value={bookingStart}
                           onChange={(e) => setBookingStart(e.target.value)}
                         />
@@ -659,7 +667,7 @@ export function FloorMapPremium() {
                         <Input 
                           data-testid="floor-map-booking-end"
                           type="datetime-local" 
-                          className="pl-12 bg-white/5 border-white/10 h-12 rounded-xl focus:border-primary-500 transition-all text-white [color-scheme:dark]"
+                          className="booking-sheet-input h-12 rounded-xl pl-12 transition-all focus:border-primary-500"
                           value={bookingEnd}
                           onChange={(e) => setBookingEnd(e.target.value)}
                         />
@@ -684,7 +692,7 @@ export function FloorMapPremium() {
                   )}
                 </div>
 
-                <div className="sticky bottom-0 border-t border-white/5 bg-[#111722]/95 p-5 backdrop-blur sm:p-6 lg:static lg:bg-white/5 lg:backdrop-blur-0">
+                <div className="booking-sheet-footer sticky bottom-0 p-5 sm:p-6 lg:static">
                   {success ? (
                     <div className="grid gap-3">
                       <Button className="h-12 w-full bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => router.push("/bookings")}>
@@ -712,7 +720,8 @@ export function FloorMapPremium() {
                   )}
                 </div>
               </Card>
-            </motion.div>
+              </motion.div>
+            </>
           )}
         </AnimatePresence>
       </div>
