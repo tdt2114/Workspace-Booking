@@ -38,9 +38,19 @@ export class BookingsController {
     return this.bookingsService.findManageable();
   }
 
+  @Get('analytics')
+  @UseGuards(RolesGuard)
+  @Roles('admin', 'manager')
+  getAnalytics() {
+    return this.bookingsService.getAnalytics();
+  }
+
   @Get('floor-state')
-  findFloorState(@Query() dto: FloorBookingStateDto) {
-    return this.bookingsService.findFloorState(dto);
+  findFloorState(
+    @Query() dto: FloorBookingStateDto,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.bookingsService.findFloorState(dto, user);
   }
 
   @Post()

@@ -27,10 +27,8 @@ Write-Host "Building web-final for mobile-dev mode..." -ForegroundColor Cyan
 $apiProcess = Start-MobileBackgroundProcess `
   -Name "api" `
   -Command "`$env:PORT='3001'; npm run dev:api" `
-  \][poiuyxhjkl;/'
- +654
- ';m m,./ -Workdir $root
-1q4ED54RE21QA490-*/
+  -Workdir $root
+
 $webProcess = Start-MobileBackgroundProcess `
   -Name "web-final" `
   -Command "`$env:NEXT_PUBLIC_API_BASE_URL='/api'; `$env:API_PROXY_TARGET='http://127.0.0.1:3001'; npm run start:final" `

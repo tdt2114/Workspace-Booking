@@ -1,8 +1,8 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Calendar, Clock, MapPin, Search, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, Loader2, Info, ChevronRight } from "lucide-react"
+import { Calendar, Clock, MapPin, Search, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, Loader2, Info, ChevronRight, BarChart3, TrendingUp, Users, Building2 } from "lucide-react"
 import type { Session } from "@supabase/supabase-js"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
@@ -33,6 +33,58 @@ interface BookingsResponse {
 
 interface MeResponse {
   role?: string
+}
+
+interface AnalyticsResponse {
+  generatedAt: string
+  summary: {
+    totalBookings: number
+    upcomingBookings: number
+    activeBookings: number
+    checkedInBookings: number
+    completedBookings: number
+    cancelledBookings: number
+    noShowBookings: number
+    totalWorkspaces: number
+    availableWorkspaces: number
+    unavailableWorkspaces: number
+    occupancyRate: number
+    noShowRate: number
+  }
+  statusCounts: {
+    confirmed: number
+    checkedIn: number
+    completed: number
+    cancelled: number
+    noShow: number
+  }
+  topWorkspaces: Array<{
+    workspaceId: string
+    workspaceName: string
+    floorName: string
+    buildingName: string
+    bookingCount: number
+  }>
+  floorUtilization: Array<{
+    floorId: string
+    floorName: string
+    buildingName: string
+    workspaceCount: number
+    occupiedCount: number
+    utilizationRate: number
+  }>
+  bookingVolume?: {
+    daily: Array<{
+      periodStart: string
+      label: string
+      count: number
+    }>
+    weekly: Array<{
+      periodStart: string
+      label: string
+      count: number
+    }>
+  }
 }
 
 interface StatCardProps {
@@ -82,8 +134,31 @@ export default function BookingsPage() {
   const [search, setSearch] = React.useState("")
   const [isAdmin, setIsAdmin] = React.useState(false)
   const [currentTime, setCurrentTime] = React.useState(() => Date.now())
+  const [analytics, setAnalytics] = React.useState<AnalyticsResponse | null>(null)
+  const [analyticsLoading, setAnalyticsLoading] = React.useState(false)
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
+
+  const loadAnalytics = React.useCallback(async (token: string) => {
+    setAnalyticsLoading(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/bookings/analytics`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+
+      if (res.ok) {
+        setAnalytics(await res.json() as AnalyticsResponse)
+      } else {
+        const message = await readApiError(res, tFallback(t, "bookings.analytics.loadFailed", "Could not load analytics."))
+        toast({ title: tFallback(t, "bookings.analytics.loadFailed", "Could not load analytics."), description: message, variant: "error" })
+      }
+    } catch (err) {
+      console.error("Failed to load analytics:", err)
+      toast({ title: tFallback(t, "bookings.analytics.loadFailed", "Could not load analytics."), description: t("bookings.networkError"), variant: "error" })
+    } finally {
+      setAnalyticsLoading(false)
+    }
+  }, [apiBaseUrl, t, toast])
 
   const loadData = React.useCallback(async (token: string, tab: "my" | "system") => {
     setLoading(true)
@@ -95,7 +170,10 @@ export default function BookingsPage() {
       if (res.ok) {
         const data = await res.json() as BookingsResponse
         if (tab === "my") setBookings(data.items || [])
-        else setSystemBookings(data.items || [])
+        else {
+          setSystemBookings(data.items || [])
+          void loadAnalytics(token)
+        }
       } else {
         const message = await readApiError(res, t("bookings.loadFailed"))
         toast({ title: t("bookings.loadFailed"), description: message, variant: "error" })
@@ -107,7 +185,7 @@ export default function BookingsPage() {
       setCurrentTime(Date.now())
       setLoading(false)
     }
-  }, [apiBaseUrl, t, toast])
+  }, [apiBaseUrl, loadAnalytics, t, toast])
 
   React.useEffect(() => {
     const bootstrap = async () => {
@@ -132,10 +210,16 @@ export default function BookingsPage() {
     setActionLoading(loadingKey)
     try {
       let endpoint = `${apiBaseUrl}/bookings/${bookingId}/cancel`
-      const method = "PATCH"
+      let method = "PATCH"
       
-      if (action === 'no-show') endpoint = `${apiBaseUrl}/bookings/maintenance/no-show`
-      if (action === 'complete') endpoint = `${apiBaseUrl}/bookings/maintenance/complete`
+      if (action === 'no-show') {
+        endpoint = `${apiBaseUrl}/bookings/run-no-show`
+        method = "POST"
+      }
+      if (action === 'complete') {
+        endpoint = `${apiBaseUrl}/bookings/run-completed`
+        method = "POST"
+      }
       
       const res = await fetch(endpoint, {
         method: method,
@@ -225,6 +309,10 @@ export default function BookingsPage() {
           <StatCard label={t("bookings.stats.finalized")} value={stats.completed} icon={<History className="text-slate-400" size={20} />} />
         </div>
 
+        {activeTab === "system" && isAdmin && (
+          <AnalyticsPanel analytics={analytics} isLoading={analyticsLoading} />
+        )}
+
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -276,50 +364,52 @@ export default function BookingsPage() {
 
             <aside className="space-y-6">
               {activeTab === "system" && isAdmin && (
-                <Card data-testid="bookings-system-section" className="glass-panel border-primary-500/20 bg-primary-500/5 overflow-hidden">
-                  <CardHeader className="bg-primary-500/10">
-                    <CardTitle className="text-lg flex items-center gap-2">
-                      <Settings2 size={20} className="text-primary-500" />
-                      {t("bookings.maintenanceTools")}
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-6 space-y-6">
-                    <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.noShowCleanup")}</span>
-                        <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                <>
+                  <Card data-testid="bookings-system-section" className="glass-panel border-primary-500/20 bg-primary-500/5 overflow-hidden">
+                    <CardHeader className="bg-primary-500/10">
+                      <CardTitle className="text-lg flex items-center gap-2">
+                        <Settings2 size={20} className="text-primary-500" />
+                        {t("bookings.maintenanceTools")}
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="p-6 space-y-6">
+                      <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.noShowCleanup")}</span>
+                          <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.noShowDescription")}</p>
+                        <Button 
+                          data-testid="bookings-run-no-show"
+                          onClick={() => handleAction('bulk', 'no-show')}
+                          className="w-full bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/20 font-bold h-10 rounded-xl"
+                          isLoading={actionLoading === "no-show"}
+                          disabled={Boolean(actionLoading)}
+                        >
+                          <Play size={14} className="mr-2" />
+                          {t("bookings.executeCleanup")}
+                        </Button>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.noShowDescription")}</p>
-                      <Button 
-                        data-testid="bookings-run-no-show"
-                        onClick={() => handleAction('bulk', 'no-show')}
-                        className="w-full bg-amber-600/10 hover:bg-amber-600/20 text-amber-500 border border-amber-500/20 font-bold h-10 rounded-xl"
-                        isLoading={actionLoading === "no-show"}
-                        disabled={Boolean(actionLoading)}
-                      >
-                        <Play size={14} className="mr-2" />
-                        {t("bookings.executeCleanup")}
-                      </Button>
-                    </div>
 
-                    <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
-                      <div className="flex justify-between items-center">
-                        <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.archiveJob")}</span>
+                      <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.archiveJob")}</span>
+                        </div>
+                        <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.archiveDescription")}</p>
+                        <Button 
+                          data-testid="bookings-run-completed"
+                          onClick={() => handleAction('bulk', 'complete')}
+                          className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 font-bold h-10 rounded-xl"
+                          isLoading={actionLoading === "complete"}
+                          disabled={Boolean(actionLoading)}
+                        >
+                          <Play size={14} className="mr-2" />
+                          {t("bookings.archivePastSessions")}
+                        </Button>
                       </div>
-                      <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.archiveDescription")}</p>
-                      <Button 
-                        data-testid="bookings-run-completed"
-                        onClick={() => handleAction('bulk', 'complete')}
-                        className="w-full bg-emerald-600/10 hover:bg-emerald-600/20 text-emerald-500 border border-emerald-500/20 font-bold h-10 rounded-xl"
-                        isLoading={actionLoading === "complete"}
-                        disabled={Boolean(actionLoading)}
-                      >
-                        <Play size={14} className="mr-2" />
-                        {t("bookings.archivePastSessions")}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
+                    </CardContent>
+                  </Card>
+                </>
               )}
 
               <Card className="glass-panel border-white/5">
@@ -345,6 +435,211 @@ export default function BookingsPage() {
         </AnimatePresence>
       </div>
     </DashboardLayout>
+  )
+}
+
+function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse | null; isLoading: boolean }) {
+  const { t } = useLanguage()
+  const summary = analytics?.summary
+  const topFloors = analytics?.floorUtilization.slice(0, 3) ?? []
+  const dailyVolume = analytics?.bookingVolume?.daily ?? []
+  const weeklyVolume = analytics?.bookingVolume?.weekly ?? []
+  const weeklyTotal = weeklyVolume.reduce((sum, item) => sum + item.count, 0)
+  const weeklyPeak = weeklyVolume.reduce((peak, item) => Math.max(peak, item.count), 0)
+  const dailyTotal = dailyVolume.reduce((sum, item) => sum + item.count, 0)
+
+  return (
+    <Card data-testid="bookings-analytics-section" className="glass-panel overflow-hidden border-emerald-500/20 bg-emerald-500/5">
+      <CardHeader className="bg-emerald-500/10">
+        <CardTitle className="flex items-center gap-2 text-lg">
+          <BarChart3 size={20} className="text-emerald-500" />
+          {tFallback(t, "bookings.analytics.title", "Workspace Analytics")}
+        </CardTitle>
+        <CardDescription>
+          {analytics
+            ? tFallback(t, "bookings.analytics.generated", "Generated at {time}").replace("{time}", new Date(analytics.generatedAt).toLocaleTimeString())
+            : tFallback(t, "bookings.analytics.subtitle", "Occupancy and usage snapshot.")}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="p-6">
+        {isLoading ? (
+          <div className="flex justify-center py-10">
+            <Loader2 className="h-8 w-8 animate-spin text-emerald-500 opacity-40" />
+          </div>
+        ) : summary ? (
+          <div className="space-y-5">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              <AnalyticsMetric
+                label={tFallback(t, "bookings.analytics.occupancy", "Occupancy")}
+                value={`${summary.occupancyRate}%`}
+                icon={<TrendingUp size={18} />}
+                tone="emerald"
+              />
+              <AnalyticsMetric
+                label={tFallback(t, "bookings.analytics.noShowRate", "No-show")}
+                value={`${summary.noShowRate}%`}
+                icon={<XCircle size={18} />}
+                tone="amber"
+              />
+              <AnalyticsMetric
+                label={tFallback(t, "bookings.analytics.availableNow", "Available now")}
+                value={summary.availableWorkspaces}
+                icon={<CheckCircle2 size={18} />}
+                tone="blue"
+              />
+              <AnalyticsMetric
+                label={tFallback(t, "bookings.analytics.checkedInNow", "Checked-in")}
+                value={summary.checkedInBookings}
+                icon={<Users size={18} />}
+                tone="emerald"
+              />
+            </div>
+
+            <div className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
+              <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    {tFallback(t, "bookings.analytics.bookingVolume", "Booking volume")}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {tFallback(t, "bookings.analytics.bookingVolumeHint", "Recent demand by day and week.")}
+                  </p>
+                </div>
+                <span className="rounded-full border border-primary-500/20 bg-primary-500/10 px-3 py-1 text-sm font-black text-primary-500">
+                  {dailyTotal}
+                </span>
+              </div>
+              <AnalyticsVolumeBars
+                label={tFallback(t, "bookings.analytics.dailyVolume", "Last 7 days")}
+                items={dailyVolume}
+              />
+              <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3">
+                <div className="rounded-xl bg-white/5 p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {tFallback(t, "bookings.analytics.sixWeekTotal", "6-week total")}
+                  </p>
+                  <p className="mt-1 text-xl font-black text-white">{weeklyTotal}</p>
+                </div>
+                <div className="rounded-xl bg-white/5 p-3">
+                  <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
+                    {tFallback(t, "bookings.analytics.weeklyPeak", "Weekly peak")}
+                  </p>
+                  <p className="mt-1 text-xl font-black text-white">{weeklyPeak}</p>
+                </div>
+              </div>
+            </div>
+
+              <div className="space-y-5">
+                <div className="space-y-3 rounded-2xl border border-white/5 bg-white/5 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {tFallback(t, "bookings.analytics.topSpaces", "Top used spaces")}
+                </p>
+                {(analytics.topWorkspaces.length ? analytics.topWorkspaces.slice(0, 3) : []).map((workspace) => (
+                  <div key={workspace.workspaceId} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-black text-white">{workspace.workspaceName}</p>
+                      <p className="truncate text-[10px] font-bold text-slate-500">{workspace.buildingName} • {workspace.floorName}</p>
+                    </div>
+                    <span className="rounded-full border border-primary-500/20 bg-primary-500/10 px-3 py-1 text-xs font-black text-primary-500">
+                      {workspace.bookingCount}
+                    </span>
+                  </div>
+                ))}
+                {analytics.topWorkspaces.length === 0 && (
+                  <p className="text-xs font-semibold text-slate-500">{tFallback(t, "bookings.analytics.noTopSpaces", "No booking usage yet.")}</p>
+                )}
+              </div>
+
+                <div className="space-y-3 rounded-2xl border border-white/5 bg-white/5 p-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  {tFallback(t, "bookings.analytics.floorUtilization", "Floor utilization")}
+                </p>
+                {topFloors.map((floor) => (
+                  <div key={floor.floorId} className="space-y-2">
+                    <div className="flex items-center justify-between gap-3 text-xs font-bold">
+                      <span className="flex min-w-0 items-center gap-2 text-white">
+                        <Building2 size={14} className="shrink-0 text-primary-500" />
+                        <span className="truncate">{floor.buildingName} • {floor.floorName}</span>
+                      </span>
+                      <span className="text-slate-400">{floor.occupiedCount}/{floor.workspaceCount}</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${floor.utilizationRate}%` }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <p className="py-8 text-center text-sm font-semibold text-slate-500">
+            {tFallback(t, "bookings.analytics.empty", "Analytics will appear when system records are loaded.")}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function AnalyticsVolumeBars({
+  label,
+  items,
+}: {
+  label: string
+  items: Array<{ periodStart: string; label: string; count: number }>
+}) {
+  const maxCount = Math.max(...items.map((item) => item.count), 1)
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <div className="grid grid-cols-7 gap-2">
+        {items.map((item) => (
+          <div key={item.periodStart} className="space-y-2">
+            <div className="flex h-20 items-end rounded-xl bg-white/5 p-1.5">
+              <div
+                className="w-full rounded-lg bg-primary-500 transition-all"
+                style={{ height: `${Math.max((item.count / maxCount) * 100, item.count > 0 ? 18 : 4)}%` }}
+              />
+            </div>
+            <div className="text-center">
+              <p className="text-sm font-black text-white">{item.count}</p>
+              <p className="truncate text-[10px] font-bold text-slate-500">{item.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AnalyticsMetric({
+  label,
+  value,
+  icon,
+  tone,
+}: {
+  label: string
+  value: number | string
+  icon: React.ReactNode
+  tone: "amber" | "blue" | "emerald"
+}) {
+  const toneClass = {
+    amber: "text-amber-500 bg-amber-500/10 border-amber-500/20",
+    blue: "text-blue-500 bg-blue-500/10 border-blue-500/20",
+    emerald: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+  }[tone]
+
+  return (
+    <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+      <div className={cn("mb-3 flex h-9 w-9 items-center justify-center rounded-xl border", toneClass)}>
+        {icon}
+      </div>
+      <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
+      <p className="mt-1 text-2xl font-black text-white">{value}</p>
+    </div>
   )
 }
 

@@ -60,6 +60,39 @@ type ManagedBookingRecord = BookingRecord & {
   user_full_name: string | null;
 };
 
+type FloorStateBookingRecord = Pick<
+  BookingRecord,
+  'id' | 'workspace_id' | 'start_time' | 'end_time' | 'status'
+> & {
+  user_email?: string | null;
+  user_full_name?: string | null;
+};
+
+type AnalyticsWorkspaceRecord = {
+  id: string;
+  floor_id: string;
+  name: string;
+  status: string;
+};
+
+type AnalyticsFloorRecord = {
+  id: string;
+  building_id: string;
+  floor_number: number;
+  name: string | null;
+};
+
+type AnalyticsBuildingRecord = {
+  id: string;
+  name: string;
+};
+
+type BookingVolumeBucket = {
+  periodStart: string;
+  label: string;
+  count: number;
+};
+
 @Injectable()
 export class BookingsService {
   async findMine(userId: string) {
@@ -140,6 +173,280 @@ export class BookingsService {
         };
       }),
     };
+  }
+
+  async getAnalytics() {
+    const supabaseAdmin = getSupabaseAdmin();
+    const [
+      { data: bookings, error: bookingsError },
+      { data: workspaces, error: workspacesError },
+      { data: floors, error: floorsError },
+      { data: buildings, error: buildingsError },
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('bookings')
+        .select(
+          'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
+        )
+        .returns<BookingRecord[]>(),
+      supabaseAdmin
+        .from('workspaces')
+        .select('id, floor_id, name, status')
+        .returns<AnalyticsWorkspaceRecord[]>(),
+      supabaseAdmin
+        .from('floors')
+        .select('id, building_id, floor_number, name')
+        .returns<AnalyticsFloorRecord[]>(),
+      supabaseAdmin
+        .from('buildings')
+        .select('id, name')
+        .returns<AnalyticsBuildingRecord[]>(),
+    ]);
+
+    if (bookingsError) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch booking analytics from Supabase',
+        details: bookingsError.message,
+      });
+    }
+
+    if (workspacesError || floorsError || buildingsError) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch workspace analytics metadata from Supabase',
+        details:
+          workspacesError?.message ??
+          floorsError?.message ??
+          buildingsError?.message,
+      });
+    }
+
+    const now = Date.now();
+    const workspaceLookup = new Map(
+      workspaces.map((workspace) => [workspace.id, workspace] as const),
+    );
+    const floorLookup = new Map(floors.map((floor) => [floor.id, floor]));
+    const buildingLookup = new Map(
+      buildings.map((building) => [building.id, building]),
+    );
+
+    const isCurrentBooking = (booking: BookingRecord) => {
+      const start = new Date(booking.start_time).getTime();
+      const end = new Date(booking.end_time).getTime();
+
+      if (!Number.isFinite(start) || !Number.isFinite(end) || end <= now) {
+        return false;
+      }
+
+      if (booking.status === 'checked_in') {
+        return true;
+      }
+
+      return booking.status === 'confirmed' && start <= now;
+    };
+
+    const currentBookings = bookings.filter(isCurrentBooking);
+    const currentWorkspaceIds = new Set(
+      currentBookings.map((booking) => booking.workspace_id),
+    );
+    const activeWorkspaces = workspaces.filter(
+      (workspace) => workspace.status === 'available',
+    );
+    const availableNow = activeWorkspaces.filter(
+      (workspace) => !currentWorkspaceIds.has(workspace.id),
+    );
+    const bookingStatusCounts = bookings.reduce<Record<string, number>>(
+      (counts, booking) => {
+        counts[booking.status] = (counts[booking.status] ?? 0) + 1;
+        return counts;
+      },
+      {},
+    );
+    const upcomingCount = bookings.filter((booking) => {
+      const start = new Date(booking.start_time).getTime();
+      return booking.status === 'confirmed' && Number.isFinite(start) && start > now;
+    }).length;
+    const activeConfirmedCount = bookings.filter((booking) => {
+      const start = new Date(booking.start_time).getTime();
+      const end = new Date(booking.end_time).getTime();
+      return (
+        booking.status === 'confirmed' &&
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        start <= now &&
+        end > now
+      );
+    }).length;
+    const checkedInCount = currentBookings.filter(
+      (booking) => booking.status === 'checked_in',
+    ).length;
+    const workspaceBookingCounts = bookings.reduce<Map<string, number>>(
+      (counts, booking) => {
+        counts.set(
+          booking.workspace_id,
+          (counts.get(booking.workspace_id) ?? 0) + 1,
+        );
+        return counts;
+      },
+      new Map<string, number>(),
+    );
+    const topWorkspaces = [...workspaceBookingCounts.entries()]
+      .map(([workspaceId, bookingCount]) => {
+        const workspace = workspaceLookup.get(workspaceId);
+        const floor = workspace ? floorLookup.get(workspace.floor_id) : null;
+        const building = floor ? buildingLookup.get(floor.building_id) : null;
+
+        return {
+          workspaceId,
+          workspaceName: workspace?.name ?? 'Unknown workspace',
+          floorName:
+            floor?.name ??
+            (floor ? `Floor ${floor.floor_number}` : 'Unknown floor'),
+          buildingName: building?.name ?? 'Unknown building',
+          bookingCount,
+        };
+      })
+      .sort((a, b) => b.bookingCount - a.bookingCount)
+      .slice(0, 5);
+    const floorUtilization = floors
+      .map((floor) => {
+        const floorWorkspaces = workspaces.filter(
+          (workspace) => workspace.floor_id === floor.id,
+        );
+        const currentFloorBookings = currentBookings.filter((booking) =>
+          floorWorkspaces.some(
+            (workspace) => workspace.id === booking.workspace_id,
+          ),
+        );
+        const building = buildingLookup.get(floor.building_id);
+
+        return {
+          floorId: floor.id,
+          floorName: floor.name ?? `Floor ${floor.floor_number}`,
+          buildingName: building?.name ?? 'Unknown building',
+          workspaceCount: floorWorkspaces.length,
+          occupiedCount: currentFloorBookings.length,
+          utilizationRate: floorWorkspaces.length
+            ? Math.round(
+                (currentFloorBookings.length / floorWorkspaces.length) * 100,
+              )
+            : 0,
+        };
+      })
+      .sort((a, b) => b.utilizationRate - a.utilizationRate);
+    const bookingVolume = this.buildBookingVolume(bookings, now);
+
+    return {
+      generatedAt: new Date(now).toISOString(),
+      summary: {
+        totalBookings: bookings.length,
+        upcomingBookings: upcomingCount,
+        activeBookings: activeConfirmedCount + checkedInCount,
+        checkedInBookings: checkedInCount,
+        completedBookings: bookingStatusCounts.completed ?? 0,
+        cancelledBookings: bookingStatusCounts.cancelled ?? 0,
+        noShowBookings: bookingStatusCounts.no_show ?? 0,
+        totalWorkspaces: workspaces.length,
+        availableWorkspaces: availableNow.length,
+        unavailableWorkspaces: workspaces.length - availableNow.length,
+        occupancyRate: workspaces.length
+          ? Math.round((currentWorkspaceIds.size / workspaces.length) * 100)
+          : 0,
+        noShowRate: bookings.length
+          ? Math.round(((bookingStatusCounts.no_show ?? 0) / bookings.length) * 100)
+          : 0,
+      },
+      statusCounts: {
+        confirmed: bookingStatusCounts.confirmed ?? 0,
+        checkedIn: bookingStatusCounts.checked_in ?? 0,
+        completed: bookingStatusCounts.completed ?? 0,
+        cancelled: bookingStatusCounts.cancelled ?? 0,
+        noShow: bookingStatusCounts.no_show ?? 0,
+      },
+      topWorkspaces,
+      floorUtilization,
+      bookingVolume,
+    };
+  }
+
+  private buildBookingVolume(bookings: BookingRecord[], now: number) {
+    return {
+      daily: this.buildDailyBookingVolume(bookings, now),
+      weekly: this.buildWeeklyBookingVolume(bookings, now),
+    };
+  }
+
+  private buildDailyBookingVolume(
+    bookings: BookingRecord[],
+    now: number,
+  ): BookingVolumeBucket[] {
+    const dayMs = 24 * 60 * 60 * 1000;
+    const todayStart = this.startOfUtcDay(new Date(now)).getTime();
+
+    return Array.from({ length: 7 }, (_, index) => {
+      const periodStartMs = todayStart - (6 - index) * dayMs;
+      const periodEndMs = periodStartMs + dayMs;
+      const periodStart = new Date(periodStartMs);
+      const count = bookings.filter((booking) => {
+        const start = new Date(booking.start_time).getTime();
+        return (
+          Number.isFinite(start) && start >= periodStartMs && start < periodEndMs
+        );
+      }).length;
+
+      return {
+        periodStart: periodStart.toISOString(),
+        label: periodStart.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        }),
+        count,
+      };
+    });
+  }
+
+  private buildWeeklyBookingVolume(
+    bookings: BookingRecord[],
+    now: number,
+  ): BookingVolumeBucket[] {
+    const weekMs = 7 * 24 * 60 * 60 * 1000;
+    const currentWeekStart = this.startOfUtcWeek(new Date(now)).getTime();
+
+    return Array.from({ length: 6 }, (_, index) => {
+      const periodStartMs = currentWeekStart - (5 - index) * weekMs;
+      const periodEndMs = periodStartMs + weekMs;
+      const periodStart = new Date(periodStartMs);
+      const count = bookings.filter((booking) => {
+        const start = new Date(booking.start_time).getTime();
+        return (
+          Number.isFinite(start) && start >= periodStartMs && start < periodEndMs
+        );
+      }).length;
+
+      return {
+        periodStart: periodStart.toISOString(),
+        label: `Week of ${periodStart.toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          timeZone: 'UTC',
+        })}`,
+        count,
+      };
+    });
+  }
+
+  private startOfUtcDay(date: Date) {
+    return new Date(
+      Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+    );
+  }
+
+  private startOfUtcWeek(date: Date) {
+    const dayStart = this.startOfUtcDay(date);
+    const day = dayStart.getUTCDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    dayStart.setUTCDate(dayStart.getUTCDate() + mondayOffset);
+    return dayStart;
   }
 
   async create(user: AuthenticatedUser, dto: CreateBookingDto) {
@@ -224,7 +531,7 @@ export class BookingsService {
     return data;
   }
 
-  async findFloorState(dto: FloorBookingStateDto) {
+  async findFloorState(dto: FloorBookingStateDto, user: AuthenticatedUser) {
     const startTime = new Date(dto.startTime);
     const endTime = new Date(dto.endTime);
 
@@ -257,7 +564,7 @@ export class BookingsService {
     if (workspaceIds.length === 0) {
       return {
         count: 0,
-        items: [] as BookingRecord[],
+        items: [] as FloorStateBookingRecord[],
       };
     }
 
@@ -279,9 +586,55 @@ export class BookingsService {
       });
     }
 
+    const bookings = data as BookingRecord[];
+    const canSeeOccupantDetails = ['admin', 'manager'].includes(user.role);
+
+    if (!canSeeOccupantDetails || bookings.length === 0) {
+      return {
+        count: bookings.length,
+        items: bookings.map((booking) => ({
+          id: booking.id,
+          workspace_id: booking.workspace_id,
+          start_time: booking.start_time,
+          end_time: booking.end_time,
+          status: booking.status,
+        })),
+      };
+    }
+
+    const uniqueUserIds = [
+      ...new Set(bookings.map((booking) => booking.user_id)),
+    ];
+    const { data: users, error: usersError } = await supabaseAdmin
+      .from('users')
+      .select('id, email, full_name')
+      .in('id', uniqueUserIds)
+      .returns<UserSummaryRecord[]>();
+
+    if (usersError) {
+      throw new InternalServerErrorException({
+        message: 'Failed to fetch floor occupant summaries from Supabase',
+        details: usersError.message,
+      });
+    }
+
+    const userLookup = new Map(users.map((item) => [item.id, item] as const));
+
     return {
-      count: data.length,
-      items: data as BookingRecord[],
+      count: bookings.length,
+      items: bookings.map((booking) => {
+        const matchedUser = userLookup.get(booking.user_id);
+
+        return {
+          id: booking.id,
+          workspace_id: booking.workspace_id,
+          start_time: booking.start_time,
+          end_time: booking.end_time,
+          status: booking.status,
+          user_email: matchedUser?.email ?? null,
+          user_full_name: matchedUser?.full_name ?? null,
+        };
+      }),
     };
   }
 

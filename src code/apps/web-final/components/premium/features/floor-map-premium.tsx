@@ -46,13 +46,18 @@ interface WorkspaceRecord {
 interface BookingRecord {
   id: string
   workspace_id: string
-  user_id: string
   start_time: string
   end_time: string
   status: string
+  user_email?: string | null
+  user_full_name?: string | null
 }
 
 type FloorMapStatus = WorkspaceRecord["status"] | "reserved"
+
+interface MeResponse {
+  role?: string
+}
 
 interface FloorsResponse {
   items: FloorRecord[]
@@ -96,10 +101,11 @@ function buildDefaultTimeWindow() {
 }
 
 export function FloorMapPremium() {
-  const { t } = useLanguage()
+  const { locale, t } = useLanguage()
   const { toast } = useToast()
   const router = useRouter()
   const [session, setSession] = React.useState<Session | null>(null)
+  const [currentRole, setCurrentRole] = React.useState<string | null>(null)
   const [buildings, setBuildings] = React.useState<BuildingRecord[]>([])
   const [floors, setFloors] = React.useState<FloorRecord[]>([])
   const [workspaces, setWorkspaces] = React.useState<WorkspaceRecord[]>([])
@@ -130,6 +136,13 @@ export function FloorMapPremium() {
   const selectedFloor = React.useMemo(() => floors.find(f => f.id === selectedFloorId), [floors, selectedFloorId])
   const filteredWorkspaces = React.useMemo(() => workspaces.filter(w => w.floor_id === selectedFloorId), [workspaces, selectedFloorId])
   const selectedWorkspace = React.useMemo(() => filteredWorkspaces.find(w => w.id === selectedWorkspaceId), [filteredWorkspaces, selectedWorkspaceId])
+  const selectedWorkspaceBooking = React.useMemo(
+    () => selectedWorkspaceId ? floorBookings.find(booking => booking.workspace_id === selectedWorkspaceId) ?? null : null,
+    [floorBookings, selectedWorkspaceId],
+  )
+  const canSeeOccupantDetails = currentRole === "admin" || currentRole === "manager"
+  const selectedWorkspaceIsReserved = Boolean(selectedWorkspaceBooking)
+  const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const currentStep = !selectedBuildingId ? 1 : success ? 4 : selectedWorkspaceId ? 3 : 2
 
   const getBuildingStats = React.useCallback((buildingId: string) => {
@@ -206,11 +219,17 @@ export function FloorMapPremium() {
 
       try {
         const headers = { Authorization: `Bearer ${currentSession.access_token}` }
-        const [buildingsRes, floorsRes, workspacesRes] = await Promise.all([
+        const [meRes, buildingsRes, floorsRes, workspacesRes] = await Promise.all([
+          fetch(`${apiBaseUrl}/me`, { headers }),
           fetch(`${apiBaseUrl}/buildings`, { headers }),
           fetch(`${apiBaseUrl}/floors`, { headers }),
           fetch(`${apiBaseUrl}/workspaces`, { headers })
         ])
+
+        if (meRes.ok) {
+          const meData = await meRes.json() as MeResponse
+          setCurrentRole(meData.role ?? null)
+        }
 
         if (buildingsRes.ok && floorsRes.ok && workspacesRes.ok) {
           const buildingsData = await buildingsRes.json() as BuildingsResponse
@@ -359,6 +378,10 @@ export function FloorMapPremium() {
 
   const handleBooking = async () => {
     if (!selectedWorkspace || !session) return
+    if (selectedWorkspaceIsReserved) {
+      setError(t("floorMap.occupiedForRange"))
+      return
+    }
     setBookingLoading(true)
     setError(null)
     setSuccess(null)
@@ -645,6 +668,55 @@ export function FloorMapPremium() {
                     </div>
                   </div>
 
+                  {selectedWorkspaceIsReserved && selectedWorkspaceBooking ? (
+                    <motion.div
+                      data-testid="floor-map-occupancy-details"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      className="space-y-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4"
+                    >
+                      <div className="flex gap-3">
+                        <AlertCircle size={20} className="mt-0.5 shrink-0 text-rose-500" />
+                        <div className="min-w-0 space-y-1">
+                          <p className="font-black text-rose-500">{t("floorMap.occupiedDetailsTitle")}</p>
+                          <p className="text-sm font-medium leading-relaxed text-slate-400">
+                            {canSeeOccupantDetails
+                              ? t("floorMap.occupiedDetailsAdmin")
+                              : t("floorMap.occupiedDetailsUser")}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="grid gap-3 rounded-xl border border-white/5 bg-white/5 p-3 text-sm">
+                        {canSeeOccupantDetails && (
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.bookedBy")}</p>
+                            <p className="mt-1 truncate font-bold text-white">
+                              {selectedWorkspaceBooking.user_full_name || selectedWorkspaceBooking.user_email || t("floorMap.privateOccupant")}
+                            </p>
+                            {selectedWorkspaceBooking.user_email && selectedWorkspaceBooking.user_full_name ? (
+                              <p className="truncate text-xs font-semibold text-slate-500">{selectedWorkspaceBooking.user_email}</p>
+                            ) : null}
+                          </div>
+                        )}
+                        <div className="grid gap-3 sm:grid-cols-2">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.status")}</p>
+                            <p className="mt-1 font-bold text-white">{t(`bookings.status.${selectedWorkspaceBooking.status === "checked_in" ? "checkedIn" : "confirmed"}`)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.timeRange")}</p>
+                            <p className="mt-1 font-bold text-white">
+                              {new Date(selectedWorkspaceBooking.start_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+                              {" - "}
+                              {new Date(selectedWorkspaceBooking.end_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ) : null}
+
+                  {!selectedWorkspaceIsReserved && (
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">{t("floorMap.startTime")}</label>
@@ -674,6 +746,7 @@ export function FloorMapPremium() {
                       </div>
                     </div>
                   </div>
+                  )}
 
                   {error && (
                     <motion.div data-testid="floor-map-booking-error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-sm flex gap-3">
@@ -707,6 +780,14 @@ export function FloorMapPremium() {
                         </Button>
                       </div>
                     </div>
+                  ) : selectedWorkspaceIsReserved ? (
+                    <Button
+                      data-testid="floor-map-occupied-disabled"
+                      className="h-12 w-full cursor-not-allowed bg-slate-500/20 font-black text-slate-400"
+                      disabled
+                    >
+                      {t("floorMap.occupiedForRange")}
+                    </Button>
                   ) : (
                     <Button 
                       data-testid="floor-map-create-booking"

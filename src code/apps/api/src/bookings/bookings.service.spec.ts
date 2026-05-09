@@ -352,6 +352,98 @@ describe('BookingsService', () => {
     expect(activeBookingsBuilder.gt).toHaveBeenCalled();
   });
 
+  it('returns daily and weekly booking volume in analytics', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-05-08T12:00:00.000Z'));
+
+    const bookingsBuilder = createQueryBuilder({
+      data: [
+        {
+          id: 'booking-1',
+          user_id: 'user-1',
+          workspace_id: 'workspace-1',
+          start_time: '2026-05-08T09:00:00.000Z',
+          end_time: '2026-05-08T10:00:00.000Z',
+          status: 'completed',
+          checked_in_at: null,
+          cancelled_at: null,
+          cancel_reason: null,
+          created_at: '2026-05-08T08:00:00.000Z',
+        },
+        {
+          id: 'booking-2',
+          user_id: 'user-2',
+          workspace_id: 'workspace-1',
+          start_time: '2026-05-07T09:00:00.000Z',
+          end_time: '2026-05-07T10:00:00.000Z',
+          status: 'no_show',
+          checked_in_at: null,
+          cancelled_at: null,
+          cancel_reason: null,
+          created_at: '2026-05-07T08:00:00.000Z',
+        },
+      ],
+      error: null,
+    });
+    const workspacesBuilder = createQueryBuilder({
+      data: [
+        {
+          id: 'workspace-1',
+          floor_id: 'floor-1',
+          name: 'Desk A-01',
+          status: 'available',
+        },
+      ],
+      error: null,
+    });
+    const floorsBuilder = createQueryBuilder({
+      data: [
+        {
+          id: 'floor-1',
+          building_id: 'building-1',
+          floor_number: 1,
+          name: 'floor A',
+        },
+      ],
+      error: null,
+    });
+    const buildingsBuilder = createQueryBuilder({
+      data: [
+        {
+          id: 'building-1',
+          name: 'Head Office',
+        },
+      ],
+      error: null,
+    });
+    const fromMock = jest
+      .fn()
+      .mockReturnValueOnce(bookingsBuilder)
+      .mockReturnValueOnce(workspacesBuilder)
+      .mockReturnValueOnce(floorsBuilder)
+      .mockReturnValueOnce(buildingsBuilder);
+
+    mockedGetSupabaseAdmin.mockReturnValue({
+      from: fromMock,
+    } as never);
+
+    const result = await service.getAnalytics();
+
+    expect(result.bookingVolume.daily).toHaveLength(7);
+    expect(result.bookingVolume.weekly).toHaveLength(6);
+    expect(result.bookingVolume.daily.at(-1)).toMatchObject({
+      periodStart: '2026-05-08T00:00:00.000Z',
+      count: 1,
+    });
+    expect(result.bookingVolume.daily.at(-2)).toMatchObject({
+      periodStart: '2026-05-07T00:00:00.000Z',
+      count: 1,
+    });
+    expect(result.bookingVolume.weekly.at(-1)?.count).toBe(2);
+
+    jest.useRealTimers();
+  });
+
   it('allows creating a booking for an available meeting room workspace', async () => {
     const startTime = isoMinutesFromNow(180);
     const endTime = isoMinutesFromNow(240);
