@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+﻿/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import {
@@ -113,9 +113,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(
@@ -138,9 +138,9 @@ describe('BookingsService', () => {
   it('rejects bookings that start earlier than the minimum lead time', async () => {
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(
@@ -149,15 +149,17 @@ describe('BookingsService', () => {
         startTime: isoMinutesFromNow(10),
         endTime: isoMinutesFromNow(70),
       }),
-    ).rejects.toThrow('Bookings must be created at least 15 minutes before the start time');
+    ).rejects.toThrow(
+      'Bookings must be created at least 15 minutes before the start time',
+    );
   });
 
   it('rejects bookings that start more than 7 days in advance', async () => {
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(
@@ -172,9 +174,9 @@ describe('BookingsService', () => {
   it('rejects bookings shorter than 30 minutes', async () => {
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(
@@ -189,9 +191,9 @@ describe('BookingsService', () => {
   it('rejects bookings longer than 8 hours', async () => {
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(
@@ -231,9 +233,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(
@@ -331,9 +333,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     const result = await service.create(user, {
@@ -491,9 +493,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     const result = await service.create(user, {
@@ -512,7 +514,7 @@ describe('BookingsService', () => {
     });
   });
 
-  it('blocks an employee from cancelling another user booking', async () => {
+  it('blocks a user from cancelling another user booking', async () => {
     const bookingBuilder = createQueryBuilder({
       data: {
         id: 'booking-1',
@@ -535,10 +537,10 @@ describe('BookingsService', () => {
     } as never);
 
     const user: AuthenticatedUser = {
-      id: 'employee-2',
-      email: 'employee2@demo.com',
-      role: 'employee',
-      fullName: 'Employee Two',
+      id: 'user-2',
+      email: 'user2@demo.com',
+      role: 'user',
+      fullName: 'User Two',
     };
 
     await expect(service.cancel('booking-1', user, {})).rejects.toThrow(
@@ -581,9 +583,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     const result = await service.release('booking-1', user);
@@ -594,7 +596,7 @@ describe('BookingsService', () => {
     });
   });
 
-  it('blocks an employee from releasing another user booking', async () => {
+  it('blocks a user from releasing another user booking', async () => {
     const bookingBuilder = createQueryBuilder({
       data: {
         id: 'booking-1',
@@ -617,10 +619,10 @@ describe('BookingsService', () => {
     } as never);
 
     const user: AuthenticatedUser = {
-      id: 'employee-2',
-      email: 'employee2@demo.com',
-      role: 'employee',
-      fullName: 'Employee Two',
+      id: 'user-2',
+      email: 'user2@demo.com',
+      role: 'user',
+      fullName: 'User Two',
     };
 
     await expect(service.release('booking-1', user)).rejects.toThrow(
@@ -652,9 +654,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     await expect(service.release('booking-1', user)).rejects.toThrow(
@@ -720,9 +722,9 @@ describe('BookingsService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee One',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User One',
     };
 
     const firstRelease = await service.release('booking-1', user);

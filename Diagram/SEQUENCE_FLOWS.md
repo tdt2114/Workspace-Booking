@@ -100,13 +100,13 @@ sequenceDiagram
 
 ```mermaid
 sequenceDiagram
-    actor AdminManager as Admin / Manager
+    actor SystemAdmin as System Admin
     participant Web as Next.js Frontend
     participant API as NestJS API
     participant DB as Supabase DB
     participant RT as Supabase Realtime
 
-    AdminManager->>Web: chạy run-no-show hoặc run-completed
+    SystemAdmin->>Web: chạy run-no-show hoặc run-completed
     Web->>API: POST /bookings/run-no-show or /run-completed
     API->>DB: tìm booking quá hạn theo rule
     API->>DB: update status tương ứng

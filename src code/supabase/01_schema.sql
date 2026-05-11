@@ -15,12 +15,26 @@ create table if not exists public.users (
   id uuid primary key references auth.users(id) on delete cascade,
   email text unique not null,
   full_name text,
-  role text not null default 'employee'
-    check (role in ('admin', 'manager', 'employee')),
+  role text not null default 'user'
+    check (role in ('admin', 'space_owner', 'user')),
   department text,
   avatar_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists public.space_owner_requests (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  status text not null default 'pending'
+    check (status in ('none', 'pending', 'approved', 'rejected')),
+  message text,
+  review_note text,
+  reviewed_by uuid references public.users(id) on delete set null,
+  reviewed_at timestamptz,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id)
 );
 
 create table if not exists public.buildings (
@@ -48,11 +62,17 @@ create table if not exists public.floors (
 create table if not exists public.workspaces (
   id uuid primary key default gen_random_uuid(),
   floor_id uuid not null references public.floors(id) on delete cascade,
+  owner_id uuid references public.users(id) on delete set null,
   name text not null,
   type text not null default 'desk'
     check (type in ('desk', 'meeting_room', 'focus_room', 'lab', 'room', 'parking')),
   status text not null default 'available'
     check (status in ('available', 'maintenance', 'inactive')),
+  approval_status text not null default 'approved'
+    check (approval_status in ('draft', 'pending_approval', 'approved', 'rejected', 'hidden')),
+  rejection_reason text,
+  approved_by uuid references public.users(id) on delete set null,
+  approved_at timestamptz,
   svg_element_id text not null,
   qr_code_value text not null unique,
   capacity integer not null default 1 check (capacity >= 1),
@@ -93,6 +113,21 @@ add column if not exists updated_at timestamptz not null default now();
 alter table public.bookings
 add column if not exists updated_at timestamptz not null default now();
 
+alter table public.workspaces
+add column if not exists owner_id uuid references public.users(id) on delete set null;
+
+alter table public.workspaces
+add column if not exists approval_status text not null default 'approved';
+
+alter table public.workspaces
+add column if not exists rejection_reason text;
+
+alter table public.workspaces
+add column if not exists approved_by uuid references public.users(id) on delete set null;
+
+alter table public.workspaces
+add column if not exists approved_at timestamptz;
+
 alter table public.bookings
 drop constraint if exists bookings_no_overlap;
 
@@ -109,6 +144,18 @@ create index if not exists idx_floors_building_id
 
 create index if not exists idx_workspaces_floor_id
   on public.workspaces(floor_id);
+
+create index if not exists idx_workspaces_owner_id
+  on public.workspaces(owner_id);
+
+create index if not exists idx_workspaces_approval_status
+  on public.workspaces(approval_status);
+
+create index if not exists idx_space_owner_requests_user_id
+  on public.space_owner_requests(user_id);
+
+create index if not exists idx_space_owner_requests_status
+  on public.space_owner_requests(status);
 
 create index if not exists idx_bookings_user_id
   on public.bookings(user_id);
@@ -142,6 +189,11 @@ create trigger set_workspaces_updated_at
 before update on public.workspaces
 for each row execute function public.set_updated_at();
 
+drop trigger if exists set_space_owner_requests_updated_at on public.space_owner_requests;
+create trigger set_space_owner_requests_updated_at
+before update on public.space_owner_requests
+for each row execute function public.set_updated_at();
+
 drop trigger if exists set_bookings_updated_at on public.bookings;
 create trigger set_bookings_updated_at
 before update on public.bookings
@@ -152,3 +204,4 @@ alter table public.buildings enable row level security;
 alter table public.floors enable row level security;
 alter table public.workspaces enable row level security;
 alter table public.bookings enable row level security;
+alter table public.space_owner_requests enable row level security;

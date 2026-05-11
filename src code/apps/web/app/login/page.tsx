@@ -101,9 +101,9 @@ export default function LoginPage() {
               <p className="mt-3 text-sm leading-7 text-slate-200">
                 admin@demo.com
                 <br />
-                manager@demo.com
+                space-owner@demo.com
                 <br />
-                employee@demo.com
+                user@demo.com
               </p>
             </div>
             <div className="rounded-2xl border border-white/10 bg-white/5 p-4">

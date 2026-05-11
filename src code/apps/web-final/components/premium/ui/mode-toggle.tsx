@@ -19,13 +19,19 @@ export function ModeToggle({ className }: ModeToggleProps) {
     <Button
       type="button"
       variant="ghost"
-      size="icon"
+      size="sm"
       aria-label={isDark ? t("common.switchToLight") : t("common.switchToDark")}
       title={isDark ? t("common.lightMode") : t("common.darkMode")}
       onClick={toggleTheme}
-      className={cn("rounded-full text-slate-400 hover:text-white", className)}
+      className={cn(
+        "h-9 gap-2 rounded-full border px-3 font-black",
+        "border-slate-200 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+        "dark:border-white/10 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15 dark:hover:text-white",
+        className
+      )}
     >
       {isDark ? <Sun size={20} /> : <Moon size={20} />}
+      <span className="hidden text-xs sm:inline">{isDark ? "Light" : "Dark"}</span>
     </Button>
   )
 }

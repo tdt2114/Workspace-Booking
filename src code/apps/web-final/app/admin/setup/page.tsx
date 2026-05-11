@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy } from "lucide-react"
+import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy, Wand2 } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
@@ -42,12 +42,21 @@ interface Workspace {
   name: string
   type: string
   status: string
+  approval_status?: string
   svg_element_id: string
   capacity: number
 }
 
 interface ListResponse<T> {
   items?: T[]
+}
+
+interface OwnerRequest {
+  id: string
+  user_id: string
+  status: "none" | "pending" | "approved" | "rejected"
+  message: string | null
+  created_at: string
 }
 
 interface TabButtonProps {
@@ -57,14 +66,14 @@ interface TabButtonProps {
   label: string
 }
 
-interface BuildingManagerProps {
+interface BuildingPanelProps {
   buildings: Building[]
   onRefresh: () => Promise<void>
   apiBaseUrl: string
   token: string
 }
 
-interface FloorManagerProps {
+interface FloorPanelProps {
   floors: Floor[]
   buildings: Building[]
   onRefresh: () => Promise<void>
@@ -72,13 +81,14 @@ interface FloorManagerProps {
   token: string
 }
 
-interface WorkspaceManagerProps {
+interface WorkspacePanelProps {
   workspaces: Workspace[]
   floors: Floor[]
   buildings: Building[]
   onRefresh: () => Promise<void>
   apiBaseUrl: string
   token: string
+  userRole: string | null
 }
 
 interface SvgMapperProps {
@@ -103,11 +113,13 @@ export default function AdminSetupPage() {
   const { toast } = useToast()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   const [session, setSession] = React.useState<Session | null>(null)
+  const [userRole, setUserRole] = React.useState<string | null>(null)
   const [activeTab, setActiveTab] = React.useState<Tab>("buildings")
   
   const [buildings, setBuildings] = React.useState<Building[]>([])
   const [floors, setFloors] = React.useState<Floor[]>([])
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([])
+  const [ownerRequests, setOwnerRequests] = React.useState<OwnerRequest[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const accessToken = session?.access_token ?? null
@@ -140,6 +152,16 @@ export default function AdminSetupPage() {
     }
   }, [apiBaseUrl, t, toast])
 
+  const loadOwnerRequests = React.useCallback(async (token: string) => {
+    const res = await fetch(`${apiBaseUrl}/space-owner-requests`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (res.ok) {
+      const data = await res.json() as ListResponse<OwnerRequest>
+      setOwnerRequests(data.items ?? [])
+    }
+  }, [apiBaseUrl])
+
   // Auth & Initial Data
   React.useEffect(() => {
     const bootstrap = async () => {
@@ -149,43 +171,138 @@ export default function AdminSetupPage() {
         return
       }
       setSession(currentSession)
+      const meRes = await fetch(`${apiBaseUrl}/me`, {
+        headers: { Authorization: `Bearer ${currentSession.access_token}` }
+      })
+      if (meRes.ok) {
+        const meData = await meRes.json() as { role?: string }
+        const role = meData.role ?? null
+        setUserRole(role)
+        if (role === "user") {
+          router.push("/dashboard")
+          return
+        }
+        if (role === "space_owner") {
+          setActiveTab("workspaces")
+        }
+        if (role === "admin") {
+          void loadOwnerRequests(currentSession.access_token)
+        }
+      }
       await loadData(currentSession.access_token ?? "")
     }
     void bootstrap()
-  }, [loadData, router])
+  }, [apiBaseUrl, loadData, loadOwnerRequests, router])
+
+  const handleOwnerRequestReview = async (id: string, status: "approved" | "rejected") => {
+    if (!accessToken || !isAdmin) return
+    try {
+      const res = await fetch(`${apiBaseUrl}/space-owner-requests/${id}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ status, reviewNote: status === "approved" ? "Approved by System Admin" : "Rejected by System Admin" }),
+      })
+      if (res.ok) {
+        await loadOwnerRequests(accessToken)
+        toast({ title: status === "approved" ? "Space Owner approved" : "Space Owner rejected", variant: "success" })
+      } else {
+        const message = await readApiError(res, "Could not review request.")
+        toast({ title: "Review failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: "Review failed", description: t("admin.networkError"), variant: "error" })
+    }
+  }
 
   if (loading && !session) return null
 
+  const isAdmin = userRole === "admin"
+  const isSpaceOwner = userRole === "space_owner"
+
   return (
     <DashboardLayout>
-      <div className="space-y-8">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-          <div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">{t("admin.title")}</h1>
-            <p className="text-slate-400 font-medium">{t("admin.subtitle")}</p>
+      <div className="space-y-6 sm:space-y-8">
+        <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_80px_-44px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-slate-950">
+          <div className="grid gap-6 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-6 dark:from-slate-950 dark:via-slate-950 dark:to-blue-950/40 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div className="max-w-3xl space-y-4">
+              <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
+                <Wand2 size={14} />
+                Setup wizard
+              </div>
+              <div>
+                <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl dark:text-white">{t("admin.title")}</h1>
+                <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-600 sm:text-base dark:text-slate-300">{t("admin.subtitle")}</p>
+              </div>
+              <div className="grid grid-cols-3 gap-3 sm:max-w-xl">
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Buildings</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{buildings.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Floors</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{floors.length}</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Spaces</p>
+                  <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{workspaces.length}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-white/10 dark:bg-slate-900">
+              {isAdmin && <TabButton active={activeTab === "buildings"} onClick={() => setActiveTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />}
+              {isAdmin && <TabButton active={activeTab === "floors"} onClick={() => setActiveTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />}
+              {isAdmin && <TabButton active={activeTab === "svg-mapping"} onClick={() => setActiveTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />}
+              <TabButton active={activeTab === "workspaces"} onClick={() => setActiveTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
+            </div>
           </div>
-          <div className="flex items-center gap-2 glass p-1.5 rounded-2xl border-white/5 overflow-x-auto no-scrollbar">
-            <TabButton active={activeTab === "buildings"} onClick={() => setActiveTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />
-            <TabButton active={activeTab === "floors"} onClick={() => setActiveTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />
-            <TabButton active={activeTab === "workspaces"} onClick={() => setActiveTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
-            <TabButton active={activeTab === "svg-mapping"} onClick={() => setActiveTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />
-          </div>
-        </div>
+        </section>
 
         {error && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-500 text-sm font-medium">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
             <AlertCircle size={18} />
             {error}
           </motion.div>
         )}
 
-        <SetupGuide
-          buildings={buildings}
-          floors={floors}
-          workspaces={workspaces}
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-        />
+        {isAdmin && (
+          <SetupGuide
+            buildings={buildings}
+            floors={floors}
+            workspaces={workspaces}
+            activeTab={activeTab}
+            onSelectTab={setActiveTab}
+          />
+        )}
+
+        {isAdmin && ownerRequests.filter((request) => request.status === "pending").length > 0 && (
+          <Card className="border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
+            <CardHeader>
+              <CardTitle>Space Owner requests</CardTitle>
+              <CardDescription>Approve or reject users who want to publish their own spaces.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {ownerRequests.filter((request) => request.status === "pending").map((request) => (
+                <div key={request.id} className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-black text-slate-950 dark:text-white">{request.user_id}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-500">{request.message || "No message provided."}</p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:flex">
+                    <Button className="h-10 rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => handleOwnerRequestReview(request.id, "approved")}>Approve</Button>
+                    <Button variant="outline" className="h-10 rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/10" onClick={() => handleOwnerRequestReview(request.id, "rejected")}>Reject</Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
+        {isSpaceOwner && (
+          <div className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
+            Spaces you create are submitted as pending approval. A System Admin must approve them before users can book them.
+          </div>
+        )}
 
         <AnimatePresence mode="wait">
           <motion.div
@@ -195,10 +312,10 @@ export default function AdminSetupPage() {
             exit={{ opacity: 0, y: -10 }}
             transition={{ duration: 0.3, ease: "easeOut" }}
           >
-            {activeTab === "buildings" ? (accessToken ? <BuildingManager buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "floors" ? (accessToken ? <FloorManager floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "workspaces" ? (accessToken ? <WorkspaceManager workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "svg-mapping" ? (accessToken ? <SvgMapper floors={floors} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
+            {activeTab === "buildings" && isAdmin ? (accessToken ? <BuildingPanel buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
+            {activeTab === "floors" && isAdmin ? (accessToken ? <FloorPanel floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
+            {activeTab === "workspaces" ? (accessToken ? <WorkspacePanel workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} userRole={userRole} /> : null) : null}
+            {activeTab === "svg-mapping" && isAdmin ? (accessToken ? <SvgMapper floors={floors} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -226,16 +343,16 @@ function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: S
   const completedCount = steps.filter((step) => step.done).length
 
   return (
-    <Card className="glass-panel overflow-hidden border-primary-500/20 bg-primary-500/5">
+    <Card className="overflow-hidden border-slate-200 bg-white shadow-[0_20px_70px_-46px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-slate-950">
       <CardContent className="p-5 sm:p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
-            <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/20 bg-primary-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-primary-300">
+            <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-300">
               <CircleDot size={14} />
               {t("admin.guide.title")}
             </div>
-            <h2 className="text-2xl font-black text-white">{t("admin.guide.heading")}</h2>
-            <p className="max-w-2xl text-sm font-medium leading-relaxed text-slate-400">
+            <h2 className="text-2xl font-black text-slate-950 dark:text-white">{t("admin.guide.heading")}</h2>
+            <p className="max-w-2xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-400">
               {nextStep ? t("admin.guide.nextStep").replace("{step}", nextStep.label) : t("admin.guide.completed")}
             </p>
           </div>
@@ -243,10 +360,10 @@ function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: S
           <div className="flex items-center gap-4">
             <div className="text-right">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("admin.guide.progress")}</p>
-              <p className="text-2xl font-black text-white">{completedCount}/5</p>
+              <p className="text-2xl font-black text-slate-950 dark:text-white">{completedCount}/5</p>
             </div>
             <Button
-              className="h-11 rounded-xl bg-primary-600 px-5 font-black hover:bg-primary-700"
+              className="h-11 rounded-xl bg-blue-600 px-5 font-black text-white shadow-lg shadow-blue-500/20 hover:bg-blue-700"
               onClick={() => onSelectTab((nextStep?.key ?? "workspaces"))}
             >
               {nextStep ? t("admin.guide.continue") : t("admin.tabs.workspaces")}
@@ -265,20 +382,20 @@ function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: S
                 onClick={() => onSelectTab(step.key)}
                 className={cn(
                   "rounded-2xl border p-4 text-left transition-all",
-                  step.done ? "border-emerald-500/20 bg-emerald-500/10" : "border-white/5 bg-white/[0.03]",
-                  isActive ? "ring-2 ring-primary-500/50" : "hover:border-primary-500/30",
+                  step.done ? "border-emerald-200 bg-emerald-50 dark:border-emerald-500/20 dark:bg-emerald-500/10" : "border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/[0.03]",
+                  isActive ? "ring-2 ring-blue-500/50" : "hover:border-blue-300 dark:hover:border-primary-500/30",
                 )}
               >
                 <div className="flex items-start gap-3">
                   <div className={cn(
                     "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black",
-                    step.done ? "bg-emerald-500 text-white" : "bg-white/10 text-slate-400",
+                    step.done ? "bg-emerald-500 text-white" : "bg-white text-slate-500 shadow-sm dark:bg-white/10 dark:text-slate-400",
                   )}>
                     {step.done ? <CheckCircle2 size={18} /> : index + 1}
                   </div>
                   <div className="space-y-1">
-                    <p className="text-sm font-black text-white">{step.label}</p>
-                    <p className="text-xs font-medium leading-relaxed text-slate-400">{step.description}</p>
+                    <p className="text-sm font-black text-slate-950 dark:text-white">{step.label}</p>
+                    <p className="text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">{step.description}</p>
                   </div>
                 </div>
               </button>
@@ -295,8 +412,8 @@ function TabButton({ active, onClick, icon, label }: TabButtonProps) {
     <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold transition-all whitespace-nowrap",
-        active ? "bg-primary-600 text-white shadow-lg shadow-primary-500/20 scale-105" : "text-slate-400 hover:text-white hover:bg-white/5"
+        "flex items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-black transition-all sm:px-5",
+        active ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
       )}
     >
       {icon}
@@ -316,14 +433,20 @@ function FieldError({ show, children }: { show: boolean; children: React.ReactNo
   )
 }
 
+const adminCardClass = "border-slate-200 bg-white shadow-[0_18px_60px_-42px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-slate-950"
+const adminPanelClass = "rounded-2xl border border-slate-200 bg-slate-50 transition-all hover:border-blue-300 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-primary-500/30"
+const adminInputClass = "h-12 rounded-xl border-slate-200 bg-white text-slate-950 dark:border-white/10 dark:bg-white/5 dark:text-white"
+const adminSelectClass = "h-12 w-full rounded-xl border border-slate-200 bg-white px-4 font-semibold text-slate-950 focus:outline-none dark:border-white/10 dark:bg-slate-900 dark:text-white"
+const adminLabelClass = "ml-1 text-[10px] font-black uppercase tracking-widest text-slate-500"
+
 function tFallback(t: (path: string) => string, path: string, fallback: string) {
   const value = t(path)
   return value === path ? fallback : value
 }
 
-// --- Specialized Managers ---
+// --- Specialized setup panels ---
 
-function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingManagerProps) {
+function BuildingPanel({ buildings, onRefresh, apiBaseUrl, token }: BuildingPanelProps) {
   const { t } = useLanguage()
   const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
@@ -361,22 +484,22 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <Card className="lg:col-span-2 glass-panel border-white/5">
+      <Card className={cn("lg:col-span-2", adminCardClass)}>
         <CardHeader>
           <CardTitle>{t("admin.activeFacilities")}</CardTitle>
           <CardDescription>{t("admin.activeFacilitiesDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {buildings.map((b: Building) => (
-            <div key={b.id} className="flex items-center justify-between p-5 rounded-2xl border border-white/5 bg-white/5 hover:border-primary-500/30 transition-all group">
+            <div key={b.id} className={cn("group flex items-center justify-between p-5", adminPanelClass)}>
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-primary-500/10 flex items-center justify-center text-primary-500 group-hover:scale-110 transition-transform">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 transition-transform group-hover:scale-105 dark:bg-primary-500/10 dark:text-primary-400">
                   <Building2 size={28} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg text-white">{b.name}</h4>
-                  <p className="text-sm text-slate-500">{b.address || t("admin.noAddress")}</p>
-                  <p className="text-xs text-slate-600">
+                  <h4 className="text-lg font-black text-slate-950 dark:text-white">{b.name}</h4>
+                  <p className="text-sm font-semibold text-slate-500">{b.address || t("admin.noAddress")}</p>
+                  <p className="text-xs font-semibold text-slate-400">
                     {b.open_time && b.close_time ? `${b.open_time.slice(0, 5)} - ${b.close_time.slice(0, 5)}` : t("floorMap.notConfigured")}
                   </p>
                 </div>
@@ -384,9 +507,9 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
               <div className="flex items-center gap-2">
                 <div className="text-right mr-4">
                   <p className="text-xs font-bold text-slate-500 uppercase">{t("admin.floorsLabel")}</p>
-                  <p className="text-white font-black">{b.total_floors}</p>
+                  <p className="font-black text-slate-950 dark:text-white">{b.total_floors}</p>
                 </div>
-                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white"><Plus size={20} /></Button>
+                <Button variant="ghost" size="icon" className="text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"><Plus size={20} /></Button>
                 <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-400"><Trash2 size={20} /></Button>
               </div>
             </div>
@@ -394,35 +517,35 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
         </CardContent>
       </Card>
 
-      <Card className="glass-panel border-white/5 h-fit sticky top-8">
+      <Card className={cn("h-fit lg:sticky lg:top-8", adminCardClass)}>
         <CardHeader>
           <CardTitle>{t("admin.addFacility")}</CardTitle>
           <CardDescription>{t("admin.addFacilityDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-5">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.buildingName")}</label>
-            <Input placeholder={t("admin.buildingPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
+            <label className={adminLabelClass}>{t("admin.buildingName")}</label>
+            <Input placeholder={t("admin.buildingPlaceholder")} className={adminInputClass} value={form.name} onChange={e => setForm({...form, name: e.target.value})} />
             <FieldError show={submitted && !form.name.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.address")}</label>
-            <Input placeholder={t("admin.addressPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
+            <label className={adminLabelClass}>{t("admin.address")}</label>
+            <Input placeholder={t("admin.addressPlaceholder")} className={adminInputClass} value={form.address} onChange={e => setForm({...form, address: e.target.value})} />
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.totalFloors")}</label>
-            <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.totalFloors} onChange={e => setForm({...form, totalFloors: parseInt(e.target.value)})} />
+            <label className={adminLabelClass}>{t("admin.totalFloors")}</label>
+            <Input type="number" className={adminInputClass} value={form.totalFloors} onChange={e => setForm({...form, totalFloors: parseInt(e.target.value)})} />
             <FieldError show={submitted && (!Number.isFinite(form.totalFloors) || form.totalFloors < 1)}>{tFallback(t, "admin.validation.positiveNumber", "Enter a number greater than zero.")}</FieldError>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.openTime")}</label>
-              <Input type="time" className="bg-white/5 border-white/10 h-12 rounded-xl [color-scheme:dark]" value={form.openTime} onChange={e => setForm({...form, openTime: e.target.value})} />
+              <label className={adminLabelClass}>{t("admin.openTime")}</label>
+              <Input type="time" className={cn(adminInputClass, "[color-scheme:light] dark:[color-scheme:dark]")} value={form.openTime} onChange={e => setForm({...form, openTime: e.target.value})} />
               <FieldError show={submitted && !form.openTime}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.closeTime")}</label>
-              <Input type="time" className="bg-white/5 border-white/10 h-12 rounded-xl [color-scheme:dark]" value={form.closeTime} onChange={e => setForm({...form, closeTime: e.target.value})} />
+              <label className={adminLabelClass}>{t("admin.closeTime")}</label>
+              <Input type="time" className={cn(adminInputClass, "[color-scheme:light] dark:[color-scheme:dark]")} value={form.closeTime} onChange={e => setForm({...form, closeTime: e.target.value})} />
               <FieldError show={submitted && !form.closeTime}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
             </div>
           </div>
@@ -435,7 +558,7 @@ function BuildingManager({ buildings, onRefresh, apiBaseUrl, token }: BuildingMa
   )
 }
 
-function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: FloorManagerProps) {
+function FloorPanel({ floors, buildings, onRefresh, apiBaseUrl, token }: FloorPanelProps) {
   const { t } = useLanguage()
   const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
@@ -485,35 +608,35 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      <Card className="lg:col-span-2 glass-panel border-white/5">
+      <Card className={cn("lg:col-span-2", adminCardClass)}>
         <CardHeader>
           <CardTitle>{t("admin.levelManagement")}</CardTitle>
           <CardDescription>{t("admin.levelManagementDesc")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {floors.map((f: Floor) => (
-            <div key={f.id} className="flex items-center justify-between p-5 rounded-2xl border border-white/5 bg-white/5 hover:border-blue-500/30 transition-all group">
+            <div key={f.id} className={cn("group flex items-center justify-between p-5", adminPanelClass)}>
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center text-blue-500 group-hover:scale-110 transition-transform">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 transition-transform group-hover:scale-105 dark:bg-blue-500/10 dark:text-blue-400">
                   <Layers size={28} />
                 </div>
                 <div>
-                  <h4 className="font-bold text-lg text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</h4>
-                  <p className="text-sm text-slate-500">{buildings.find((b) => b.id === f.building_id)?.name}</p>
+                  <h4 className="text-lg font-black text-slate-950 dark:text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</h4>
+                  <p className="text-sm font-semibold text-slate-500">{buildings.find((b) => b.id === f.building_id)?.name}</p>
                 </div>
               </div>
               <div className="flex items-center gap-4">
                 <div className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", f.svg_map_url ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20" : "bg-amber-500/10 text-amber-500 border border-amber-500/20")}>
                   {f.svg_map_url ? t("admin.svgMapped") : t("admin.noSvg")}
                 </div>
-                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white"><ChevronRight size={20} /></Button>
+                <Button variant="ghost" size="icon" className="text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"><ChevronRight size={20} /></Button>
               </div>
             </div>
           ))}
         </CardContent>
       </Card>
       
-      <Card className="glass-panel border-white/5 h-fit">
+      <Card className={cn("h-fit", adminCardClass)}>
         <CardHeader>
           <CardTitle>{t("admin.quickAddFloor")}</CardTitle>
           <CardDescription>{t("admin.quickAddFloorDesc")}</CardDescription>
@@ -522,27 +645,27 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
           {buildings.length > 0 ? (
             <>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.selectBuilding")}</label>
+                <label className={adminLabelClass}>{t("admin.selectBuilding")}</label>
                 <select
-                  className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none"
+                  className={adminSelectClass}
                   value={effectiveBuildingId}
                   onChange={(e) => setForm({ ...form, buildingId: e.target.value })}
                 >
                   {buildings.map((building) => (
-                    <option key={building.id} value={building.id} className="bg-slate-900 text-white">
+                    <option key={building.id} value={building.id} className="bg-white text-slate-950 dark:bg-slate-900 dark:text-white">
                       {building.name}
                     </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.floorNumber")}</label>
-                <Input type="number" className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.floorNumber} onChange={(e) => setForm({ ...form, floorNumber: parseInt(e.target.value) })} />
+                <label className={adminLabelClass}>{t("admin.floorNumber")}</label>
+                <Input type="number" className={adminInputClass} value={form.floorNumber} onChange={(e) => setForm({ ...form, floorNumber: parseInt(e.target.value) })} />
                 <FieldError show={submitted && (!Number.isFinite(form.floorNumber) || form.floorNumber < 1)}>{tFallback(t, "admin.validation.positiveNumber", "Enter a number greater than zero.")}</FieldError>
               </div>
               <div className="space-y-2">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.floorName")}</label>
-                <Input placeholder={t("admin.floorNamePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+                <label className={adminLabelClass}>{t("admin.floorName")}</label>
+                <Input placeholder={t("admin.floorNamePlaceholder")} className={adminInputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               </div>
               <Button className="w-full bg-blue-600 hover:bg-blue-700 h-12 font-black" onClick={handleCreate} disabled={!effectiveBuildingId} isLoading={isSaving} loadingText={t("admin.saving")}>
                 {t("admin.createFloor")}
@@ -550,7 +673,7 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
             </>
           ) : (
             <>
-              <p className="text-sm text-slate-400 text-center py-8">{t("admin.selectBuildingFirst")}</p>
+              <p className="py-8 text-center text-sm font-semibold text-slate-500">{t("admin.selectBuildingFirst")}</p>
               <Button className="w-full bg-white/5 border border-white/10 text-slate-500 font-bold" disabled>{t("admin.createFloor")}</Button>
             </>
           )}
@@ -560,7 +683,7 @@ function FloorManager({ floors, buildings, onRefresh, apiBaseUrl, token }: Floor
   )
 }
 
-function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl, token }: WorkspaceManagerProps) {
+function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, token, userRole }: WorkspacePanelProps) {
   const { t } = useLanguage()
   const router = useRouter()
   const { toast } = useToast()
@@ -578,6 +701,7 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
   })
   const effectiveFloorId = form.floorId || floors[0]?.id || ""
   const isValid = Boolean(effectiveFloorId) && Boolean(form.name.trim()) && Boolean(form.svgElementId.trim()) && Boolean(form.qrCodeValue.trim()) && Number.isFinite(form.capacity) && form.capacity > 0
+  const isAdmin = userRole === "admin"
 
   const describeFloor = React.useCallback((floor: Floor) => {
     const building = buildings.find((item) => item.id === floor.building_id)
@@ -634,6 +758,36 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
     }
   }
 
+  const handleReview = async (workspaceId: string, approvalStatus: "approved" | "rejected") => {
+    if (!token || !isAdmin) return
+    setIsSaving(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceId}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          approvalStatus,
+          rejectionReason: approvalStatus === "rejected" ? "Rejected by System Admin" : undefined,
+        }),
+      })
+
+      if (res.ok) {
+        await onRefresh()
+        toast({
+          title: approvalStatus === "approved" ? "Workspace approved" : "Workspace rejected",
+          variant: "success",
+        })
+      } else {
+        const message = await readApiError(res, "Could not review workspace.")
+        toast({ title: "Review failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: "Review failed", description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   const openLastCreatedOnMap = React.useCallback(() => {
     if (!lastCreated) return
     const floor = floors.find((item) => item.id === lastCreated.floorId)
@@ -646,30 +800,41 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
       <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
         {workspaces.map((w: Workspace) => (
-          <Card key={w.id} className="glass-panel border-white/5 hover:border-primary-500/30 transition-all group relative overflow-hidden">
+          <Card key={w.id} className={cn("group relative overflow-hidden transition-all hover:border-blue-300", adminCardClass)}>
              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                 <MapPin size={80} />
              </div>
              <CardContent className="p-6">
                 <div className="flex items-center gap-4 mb-4">
-                   <div className="w-12 h-12 rounded-xl bg-primary-500/10 flex items-center justify-center text-primary-500">
+                   <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-100 text-blue-600 dark:bg-primary-500/10 dark:text-primary-400">
                       <MapPin size={24} />
                    </div>
                    <div>
-                      <h4 className="font-bold text-white text-lg">{w.name}</h4>
-                      <p className="text-xs text-slate-500">{w.type.toUpperCase()} • {t("admin.capacity")}: {w.capacity}</p>
+                      <h4 className="text-lg font-black text-slate-950 dark:text-white">{w.name}</h4>
+                      <p className="text-xs font-semibold text-slate-500">{w.type.toUpperCase()} • {t("admin.capacity")}: {w.capacity}</p>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">{w.approval_status ?? "approved"}</p>
                    </div>
                 </div>
                 <div className="flex items-center justify-between mt-6">
                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.svgId")}: {w.svg_element_id}</span>
                    <Button variant="ghost" size="sm" className="text-primary-500 font-bold hover:bg-primary-500/10">{t("admin.edit")}</Button>
                 </div>
+                {isAdmin && w.approval_status === "pending_approval" && (
+                  <div className="mt-4 grid grid-cols-2 gap-2">
+                    <Button className="h-10 rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => handleReview(w.id, "approved")} disabled={isSaving}>
+                      Approve
+                    </Button>
+                    <Button variant="outline" className="h-10 rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/10" onClick={() => handleReview(w.id, "rejected")} disabled={isSaving}>
+                      Reject
+                    </Button>
+                  </div>
+                )}
              </CardContent>
           </Card>
         ))}
       </div>
 
-      <Card className="glass-panel border-white/5 h-fit lg:sticky lg:top-8">
+      <Card className={cn("h-fit lg:sticky lg:top-8", adminCardClass)}>
         <CardHeader>
           <CardTitle>{t("admin.newWorkspace")}</CardTitle>
           <CardDescription>{t("admin.levelManagementDesc")}</CardDescription>
@@ -680,8 +845,8 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
               <div className="flex items-start gap-3">
                 <CheckCircle2 size={20} className="mt-0.5 shrink-0 text-emerald-400" />
                 <div className="min-w-0 flex-1">
-                  <p className="text-sm font-black text-white">{tFallback(t, "admin.workspaceReady", "Workspace created")}</p>
-                  <p className="mt-1 text-xs font-medium text-slate-300">{lastCreated.name}</p>
+                  <p className="text-sm font-black text-slate-950 dark:text-white">{tFallback(t, "admin.workspaceReady", "Workspace created")}</p>
+                  <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{lastCreated.name}</p>
                   <Button className="mt-3 h-10 w-full rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={openLastCreatedOnMap}>
                     <ExternalLink size={16} className="mr-2" />
                     {tFallback(t, "admin.viewOnFloorMap", "Check on Floor Map")}
@@ -691,55 +856,55 @@ function WorkspaceManager({ workspaces, floors, buildings, onRefresh, apiBaseUrl
             </div>
           )}
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.selectFloor")}</label>
+            <label className={adminLabelClass}>{t("admin.selectFloor")}</label>
             <select
-              className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none"
+              className={adminSelectClass}
               value={effectiveFloorId}
               onChange={(e) => setForm({ ...form, floorId: e.target.value })}
             >
               {floors.map((floor) => (
-                <option key={floor.id} value={floor.id} className="bg-slate-900 text-white">
+                <option key={floor.id} value={floor.id} className="bg-white text-slate-950 dark:bg-slate-900 dark:text-white">
                   {describeFloor(floor)}
                 </option>
               ))}
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceName")}</label>
-            <Input placeholder={t("admin.workspaceNamePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <label className={adminLabelClass}>{t("admin.workspaceName")}</label>
+            <Input placeholder={t("admin.workspaceNamePlaceholder")} className={adminInputClass} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <FieldError show={submitted && !form.name.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceType")}</label>
-              <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-3 text-white font-medium focus:outline-none" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
+              <label className={adminLabelClass}>{t("admin.workspaceType")}</label>
+              <select className={adminSelectClass} value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
                 {["desk", "meeting_room", "focus_room", "lab", "room", "parking"].map((type) => (
-                  <option key={type} value={type} className="bg-slate-900 text-white">{type}</option>
+                  <option key={type} value={type} className="bg-white text-slate-950 dark:bg-slate-900 dark:text-white">{type}</option>
                 ))}
               </select>
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.workspaceStatus")}</label>
-              <select className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-3 text-white font-medium focus:outline-none" value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
+              <label className={adminLabelClass}>{t("admin.workspaceStatus")}</label>
+              <select className={adminSelectClass} value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })}>
                 {["available", "maintenance", "inactive"].map((status) => (
-                  <option key={status} value={status} className="bg-slate-900 text-white">{status}</option>
+                  <option key={status} value={status} className="bg-white text-slate-950 dark:bg-slate-900 dark:text-white">{status}</option>
                 ))}
               </select>
             </div>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.svgId")}</label>
-            <Input placeholder={t("admin.svgIdPlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.svgElementId} onChange={(e) => setForm({ ...form, svgElementId: e.target.value })} />
+            <label className={adminLabelClass}>{t("admin.svgId")}</label>
+            <Input placeholder={t("admin.svgIdPlaceholder")} className={adminInputClass} value={form.svgElementId} onChange={(e) => setForm({ ...form, svgElementId: e.target.value })} />
             <FieldError show={submitted && !form.svgElementId.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.qrCodeValue")}</label>
-            <Input placeholder={t("admin.qrCodePlaceholder")} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.qrCodeValue} onChange={(e) => setForm({ ...form, qrCodeValue: e.target.value })} />
+            <label className={adminLabelClass}>{t("admin.qrCodeValue")}</label>
+            <Input placeholder={t("admin.qrCodePlaceholder")} className={adminInputClass} value={form.qrCodeValue} onChange={(e) => setForm({ ...form, qrCodeValue: e.target.value })} />
             <FieldError show={submitted && !form.qrCodeValue.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">{t("admin.capacity")}</label>
-            <Input type="number" min={1} max={50} className="bg-white/5 border-white/10 h-12 rounded-xl" value={form.capacity} onChange={(e) => setForm({ ...form, capacity: parseInt(e.target.value) })} />
+            <label className={adminLabelClass}>{t("admin.capacity")}</label>
+            <Input type="number" min={1} max={50} className={adminInputClass} value={form.capacity} onChange={(e) => setForm({ ...form, capacity: parseInt(e.target.value) })} />
             <FieldError show={submitted && (!Number.isFinite(form.capacity) || form.capacity < 1)}>{tFallback(t, "admin.validation.positiveNumber", "Enter a number greater than zero.")}</FieldError>
           </div>
           <Button
@@ -839,8 +1004,8 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-      <Card className="lg:col-span-3 glass-panel border-white/5 flex flex-col min-h-[600px]">
-        <CardHeader className="bg-white/5">
+      <Card className={cn("flex min-h-[600px] flex-col lg:col-span-3", adminCardClass)}>
+        <CardHeader className="border-b border-slate-200 bg-slate-50 dark:border-white/10 dark:bg-white/5">
           <CardTitle>{t("admin.floorMappingVisualizer")}</CardTitle>
           <CardDescription>{t("admin.floorMappingDesc")}</CardDescription>
         </CardHeader>
@@ -852,8 +1017,8 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
                   <FileCode size={48} />
                 </div>
                 <div className="space-y-2">
-                  <h4 className="text-xl font-bold text-white">{t("admin.mappingConsole")}</h4>
-                  <p className="text-slate-500 max-w-md">{t("admin.mappingConsoleDesc")}</p>
+                  <h4 className="text-xl font-black text-slate-950 dark:text-white">{t("admin.mappingConsole")}</h4>
+                  <p className="max-w-md font-semibold text-slate-500">{t("admin.mappingConsoleDesc")}</p>
                 </div>
               </div>
             </div>
@@ -861,24 +1026,24 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
             <div className="flex min-h-[460px] items-center justify-center text-center">
               <div className="max-w-md space-y-4">
                 <Upload size={48} className="mx-auto text-amber-400" />
-                <h4 className="text-xl font-black text-white">{tFallback(t, "admin.svgRequiredTitle", "Upload an SVG map first")}</h4>
-                <p className="text-sm font-medium leading-relaxed text-slate-400">{tFallback(t, "admin.svgRequiredDesc", "This floor does not have an SVG map yet. Upload the map on the right, then copy the detected element IDs into workspace setup.")}</p>
+                <h4 className="text-xl font-black text-slate-950 dark:text-white">{tFallback(t, "admin.svgRequiredTitle", "Upload an SVG map first")}</h4>
+                <p className="text-sm font-semibold leading-relaxed text-slate-500 dark:text-slate-400">{tFallback(t, "admin.svgRequiredDesc", "This floor does not have an SVG map yet. Upload the map on the right, then copy the detected element IDs into workspace setup.")}</p>
               </div>
             </div>
           ) : (
             <div className="space-y-5">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>
-                  <h4 className="text-xl font-black text-white">{tFallback(t, "admin.detectedSvgIds", "Detected SVG IDs")}</h4>
-                  <p className="text-sm font-medium text-slate-400">{tFallback(t, "admin.detectedSvgIdsDesc", "Click any ID to copy it, then paste it into the workspace SVG ID field.")}</p>
+                  <h4 className="text-xl font-black text-slate-950 dark:text-white">{tFallback(t, "admin.detectedSvgIds", "Detected SVG IDs")}</h4>
+                  <p className="text-sm font-semibold text-slate-500 dark:text-slate-400">{tFallback(t, "admin.detectedSvgIdsDesc", "Click any ID to copy it, then paste it into the workspace SVG ID field.")}</p>
                 </div>
-                <div className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-xs font-black text-slate-300">
+                <div className="rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-xs font-black text-slate-600 dark:border-white/10 dark:bg-white/5 dark:text-slate-300">
                   {svgIds.length} {tFallback(t, "admin.idsFound", "IDs found")}
                 </div>
               </div>
 
               {isLoadingSvg ? (
-                <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-8 text-center text-sm font-bold text-slate-400">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-8 text-center text-sm font-bold text-slate-500 dark:border-white/10 dark:bg-white/[0.03] dark:text-slate-400">
                   {tFallback(t, "admin.loadingSvgIds", "Reading SVG IDs...")}
                 </div>
               ) : svgIds.length > 0 ? (
@@ -888,9 +1053,9 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
                       key={svgId}
                       type="button"
                       onClick={() => copySvgId(svgId)}
-                      className="group flex items-center justify-between gap-3 rounded-2xl border border-white/5 bg-white/[0.04] p-4 text-left transition-all hover:border-primary-500/30 hover:bg-primary-500/10"
+                      className="group flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-left transition-all hover:border-blue-300 hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.04] dark:hover:border-primary-500/30 dark:hover:bg-primary-500/10"
                     >
-                      <span className="min-w-0 truncate font-mono text-sm font-bold text-white">{svgId}</span>
+                      <span className="min-w-0 truncate font-mono text-sm font-bold text-slate-950 dark:text-white">{svgId}</span>
                       <Copy size={16} className="shrink-0 text-slate-500 transition-colors group-hover:text-primary-400" />
                     </button>
                   ))}
@@ -906,15 +1071,15 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
       </Card>
 
       <div className="space-y-6">
-        <Card className="glass-panel border-white/5">
+        <Card className={adminCardClass}>
           <CardHeader>
             <CardTitle>{t("admin.uploadAssets")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
              <div className="space-y-2">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.targetFloor")}</label>
+               <label className={adminLabelClass}>{t("admin.targetFloor")}</label>
                <select
-                 className="w-full bg-white/5 border border-white/10 h-12 rounded-xl px-4 text-white font-medium focus:outline-none"
+                 className={adminSelectClass}
                  onChange={(e) => {
                    const nextFloorId = e.target.value
                    setSelectedFloorId(nextFloorId)
@@ -924,13 +1089,13 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
                >
                   <option value="">{t("admin.selectFloor")}</option>
                   {floors.map((f) => (
-                    <option key={f.id} value={f.id} className="bg-slate-900 text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</option>
+                    <option key={f.id} value={f.id} className="bg-white text-slate-950 dark:bg-slate-900 dark:text-white">{f.name || t("common.floorFallback").replace("{number}", String(f.floor_number))}</option>
                   ))}
                </select>
              </div>
              <div className="space-y-2">
-               <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.svgSource")}</label>
-               <div className="relative h-32 border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center hover:bg-white/5 transition-all cursor-pointer">
+               <label className={adminLabelClass}>{t("admin.svgSource")}</label>
+               <div className="relative flex h-32 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50 transition-all hover:bg-blue-50 dark:border-white/10 dark:bg-white/[0.03] dark:hover:bg-white/5">
                   <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" accept=".svg" onChange={e => setFile(e.target.files?.[0] || null)} />
                   <Upload size={32} className="text-slate-500 mb-2" />
                   <p className="text-xs text-slate-500 font-bold">{file ? file.name : t("admin.chooseSvg")}</p>
@@ -942,13 +1107,13 @@ function SvgMapper({ floors, onRefresh, apiBaseUrl, token }: SvgMapperProps) {
           </CardContent>
         </Card>
 
-        <Card className="glass-panel border-primary-500/20 bg-primary-500/5">
+        <Card className="border-blue-200 bg-blue-50 dark:border-primary-500/20 dark:bg-primary-500/5">
           <CardContent className="p-6">
             <div className="flex gap-4">
               <Info className="text-primary-500 shrink-0" size={24} />
               <div className="space-y-1">
-                <h4 className="font-bold text-white text-sm">{t("admin.systemTip")}</h4>
-                <p className="text-xs text-slate-400 leading-relaxed">{t("admin.systemTipDesc")}</p>
+                <h4 className="text-sm font-black text-slate-950 dark:text-white">{t("admin.systemTip")}</h4>
+                <p className="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-400">{t("admin.systemTipDesc")}</p>
               </div>
             </div>
           </CardContent>

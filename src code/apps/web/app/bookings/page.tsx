@@ -11,7 +11,7 @@ import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 type AuthProfile = {
   id: string;
   email: string;
-  role: "admin" | "manager" | "employee";
+  role: "admin" | "space_owner" | "user";
   fullName: string;
 };
 
@@ -143,7 +143,7 @@ export default function BookingsPage() {
     useState<BookingLifecycleResponse | null>(null);
 
   const canRunLifecycle =
-    profile?.role === "admin" || profile?.role === "manager";
+    profile?.role === "admin" || profile?.role === "space_owner";
   const canManageSystemBookings = canRunLifecycle;
   const activeQuotaBookings = useMemo(
     () =>
@@ -409,7 +409,7 @@ export default function BookingsPage() {
         setWorkspaces(workspacesPayload.items);
         setFloors(floorsPayload.items);
 
-        if (profilePayload.role === "admin" || profilePayload.role === "manager") {
+        if (profilePayload.role === "admin" || profilePayload.role === "space_owner") {
           const managedBookingsResponse = await fetch(
             `${apiBaseUrl}/bookings/manage`,
             { headers },
@@ -699,7 +699,7 @@ export default function BookingsPage() {
               </h1>
               <p className="max-w-3xl text-base leading-7 text-slate-600">
                 This screen centralizes booking history, status filters, cancel
-                actions, and manager lifecycle tools so booking operations are no
+                actions, and admin lifecycle tools so booking operations are no
                 longer hidden only inside the floor map prototype.
               </p>
             </div>
@@ -1042,7 +1042,7 @@ export default function BookingsPage() {
                 Lifecycle tools
               </p>
               <p className="mt-2 text-sm leading-6 text-slate-600">
-                Managers and admins can simulate scheduled jobs here without
+                Space owners and admins can simulate scheduled jobs here without
                 leaving the UI.
               </p>
 
@@ -1051,7 +1051,7 @@ export default function BookingsPage() {
                   className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"
                   data-testid="bookings-lifecycle-disabled"
                 >
-                  This panel is only enabled for manager and admin roles.
+                  This panel is only enabled for space owner and admin roles.
                 </p>
               ) : (
                 <div className="mt-5 space-y-4">
@@ -1142,8 +1142,8 @@ export default function BookingsPage() {
                   System bookings
                 </p>
                 <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-                  This manager view exposes bookings across the whole system so
-                  admins and managers can filter by user, workspace, status, and
+                  This space owner view exposes bookings across the whole system so
+                  admins and space owners can filter by user, workspace, status, and
                   date without leaving the browser.
                 </p>
               </div>
@@ -1327,7 +1327,7 @@ export default function BookingsPage() {
                           >
                             {cancelLoadingId === booking.id
                               ? "Cancelling..."
-                              : "Cancel as manager"}
+                              : "Cancel as space owner"}
                           </button>
                         ) : null}
 
@@ -1340,7 +1340,7 @@ export default function BookingsPage() {
                           >
                             {releaseLoadingId === booking.id
                               ? "Releasing..."
-                              : "Release as manager"}
+                              : "Release as space owner"}
                           </button>
                         ) : null}
 

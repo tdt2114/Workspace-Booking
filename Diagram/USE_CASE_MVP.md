@@ -25,8 +25,8 @@ Không dùng sơ đồ này để mô tả full system trong tương lai nếu s
 
 ```mermaid
 flowchart LR
-    employee[Employee]
-    manager[Manager]
+    user[User]
+    spaceOwner[Space Owner]
     admin[Admin]
 
     UC1((Đăng nhập))
@@ -47,25 +47,25 @@ flowchart LR
     UC15((Quản trị booking toàn hệ thống))
     UC16((Xem trạng thái booking realtime))
 
-    employee --> UC1
-    employee --> UC2
-    employee --> UC3
-    employee --> UC4
-    employee --> UC5
-    employee --> UC6
-    employee --> UC7
-    employee --> UC8
-    employee --> UC16
+    user --> UC1
+    user --> UC2
+    user --> UC3
+    user --> UC4
+    user --> UC5
+    user --> UC6
+    user --> UC7
+    user --> UC8
+    user --> UC16
 
-    manager --> UC1
-    manager --> UC2
-    manager --> UC3
-    manager --> UC6
-    manager --> UC8
-    manager --> UC13
-    manager --> UC14
-    manager --> UC15
-    manager --> UC16
+    spaceOwner --> UC1
+    spaceOwner --> UC2
+    spaceOwner --> UC3
+    spaceOwner --> UC6
+    spaceOwner --> UC8
+    spaceOwner --> UC13
+    spaceOwner --> UC14
+    spaceOwner --> UC15
+    spaceOwner --> UC16
 
     admin --> UC1
     admin --> UC2

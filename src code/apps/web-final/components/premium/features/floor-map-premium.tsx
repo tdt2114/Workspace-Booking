@@ -140,10 +140,24 @@ export function FloorMapPremium() {
     () => selectedWorkspaceId ? floorBookings.find(booking => booking.workspace_id === selectedWorkspaceId) ?? null : null,
     [floorBookings, selectedWorkspaceId],
   )
-  const canSeeOccupantDetails = currentRole === "admin" || currentRole === "manager"
+  const canSeeOccupantDetails = currentRole === "admin" || currentRole === "space_owner"
   const selectedWorkspaceIsReserved = Boolean(selectedWorkspaceBooking)
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const currentStep = !selectedBuildingId ? 1 : success ? 4 : selectedWorkspaceId ? 3 : 2
+  const floorReservedWorkspaceIds = React.useMemo(
+    () => new Set(floorBookings.map(booking => booking.workspace_id)),
+    [floorBookings],
+  )
+  const selectedFloorStats = React.useMemo(() => {
+    const activeWorkspaces = filteredWorkspaces.filter(workspace => workspace.status === "available")
+    const reservedCount = activeWorkspaces.filter(workspace => floorReservedWorkspaceIds.has(workspace.id)).length
+
+    return {
+      total: filteredWorkspaces.length,
+      available: Math.max(activeWorkspaces.length - reservedCount, 0),
+      reserved: reservedCount,
+    }
+  }, [filteredWorkspaces, floorReservedWorkspaceIds])
 
   const getBuildingStats = React.useCallback((buildingId: string) => {
     const buildingFloors = floors.filter(floor => floor.building_id === buildingId)
@@ -441,11 +455,11 @@ export function FloorMapPremium() {
         <BookingStepIndicator currentStep={currentStep} />
 
         <div className="space-y-3">
-          <div className="inline-flex items-center gap-2 rounded-full border border-primary-500/20 bg-primary-500/10 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-primary-400">
+          <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-black uppercase tracking-[0.2em] text-blue-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-400">
             <Building size={14} />
             {t("floorMap.chooseLocation")}
           </div>
-          <p className="max-w-2xl text-sm font-medium text-slate-400">{t("floorMap.chooseLocationDescription")}</p>
+          <p className="max-w-2xl text-sm font-semibold text-slate-500 dark:text-slate-400">{t("floorMap.chooseLocationDescription")}</p>
         </div>
 
         {buildings.length > 0 ? (
@@ -464,45 +478,45 @@ export function FloorMapPremium() {
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   onClick={() => handleSelectBuilding(building.id)}
-                  className="group relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/5 p-6 text-left transition-all hover:-translate-y-1 hover:border-primary-500/40 hover:bg-primary-500/10"
+                  className="group relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 text-left shadow-sm shadow-slate-200/60 transition-all hover:-translate-y-1 hover:border-blue-300 hover:shadow-xl hover:shadow-blue-100 dark:border-white/10 dark:bg-white/5 dark:hover:border-primary-500/40 dark:hover:bg-primary-500/10"
                 >
-                  <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-primary-500/10 blur-2xl transition-opacity group-hover:opacity-100" />
+                  <div className="absolute -right-10 -top-10 h-32 w-32 rounded-full bg-blue-100 blur-2xl transition-opacity group-hover:opacity-100 dark:bg-primary-500/10" />
                   <div className="relative z-10 space-y-6">
                     <div className="flex items-start justify-between gap-4">
-                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-500/10 text-primary-500 ring-1 ring-primary-500/20">
+                      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 ring-1 ring-blue-200 dark:bg-primary-500/10 dark:text-primary-500 dark:ring-primary-500/20">
                         <Building size={28} />
                       </div>
-                      <ChevronRight className="text-slate-500 transition-transform group-hover:translate-x-1 group-hover:text-primary-400" size={22} />
+                      <ChevronRight className="text-slate-400 transition-transform group-hover:translate-x-1 group-hover:text-blue-600 dark:text-slate-500 dark:group-hover:text-primary-400" size={22} />
                     </div>
 
                     <div className="space-y-2">
-                      <h3 className="text-2xl font-black text-white">{building.name}</h3>
-                      <p className="min-h-10 text-sm font-medium leading-relaxed text-slate-400">
+                      <h3 className="text-2xl font-black text-slate-950 dark:text-white">{building.name}</h3>
+                      <p className="min-h-10 text-sm font-semibold leading-relaxed text-slate-500 dark:text-slate-400">
                         {building.address || t("admin.noAddress")}
                       </p>
                     </div>
 
                     <div className="grid grid-cols-3 gap-3">
-                      <div className="rounded-2xl border border-white/5 bg-white/5 p-3">
-                        <p className="text-lg font-black text-white">{stats.floorCount}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t("admin.floorsLabel")}</p>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/5 dark:bg-white/5">
+                        <p className="text-lg font-black text-slate-950 dark:text-white">{stats.floorCount}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-500">{t("admin.floorsLabel")}</p>
                       </div>
-                      <div className="rounded-2xl border border-white/5 bg-white/5 p-3">
-                        <p className="text-lg font-black text-white">{stats.workspaceCount}</p>
+                      <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 dark:border-white/5 dark:bg-white/5">
+                        <p className="text-lg font-black text-slate-950 dark:text-white">{stats.workspaceCount}</p>
                         <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{t("layout.nav.bookSpace")}</p>
                       </div>
-                      <div className="rounded-2xl border border-emerald-500/10 bg-emerald-500/10 p-3">
-                        <p className="text-lg font-black text-emerald-400">{stats.availableCount}</p>
-                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-500/80">{t("floorMap.available")}</p>
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/10 dark:bg-emerald-500/10">
+                        <p className="text-lg font-black text-emerald-600 dark:text-emerald-400">{stats.availableCount}</p>
+                        <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/80 dark:text-emerald-500/80">{t("floorMap.available")}</p>
                       </div>
                     </div>
 
-                    <div className="flex items-center justify-between border-t border-white/5 pt-5">
+                    <div className="flex items-center justify-between border-t border-slate-200 pt-5 dark:border-white/5">
                       <div>
                         <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.openHours")}</p>
-                        <p className="text-sm font-bold text-slate-300">{openHours}</p>
+                        <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{openHours}</p>
                       </div>
-                      <span className="rounded-full bg-primary-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-primary-500/20">
+                      <span className="rounded-full bg-blue-600 px-4 py-2 text-xs font-black text-white shadow-lg shadow-blue-500/20">
                         {t("floorMap.continueToMap")}
                       </span>
                     </div>
@@ -512,7 +526,7 @@ export function FloorMapPremium() {
             })}
           </div>
         ) : (
-          <Card className="glass-panel flex min-h-[320px] items-center justify-center border-dashed border-white/10 p-10 text-center">
+          <Card className="flex min-h-[320px] items-center justify-center border-dashed border-slate-200 bg-white p-10 text-center dark:border-white/10 dark:bg-slate-950">
             <div className="space-y-4 text-slate-500">
               <Building size={64} className="mx-auto opacity-30" />
               <p className="font-bold">{t("floorMap.locationsEmpty")}</p>
@@ -527,30 +541,34 @@ export function FloorMapPremium() {
     <div className="flex flex-col h-full space-y-6" data-testid="floor-map-shell">
       <BookingStepIndicator currentStep={currentStep} />
 
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
       {/* Filters Bar */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:flex-wrap lg:items-center">
+      <aside className="space-y-4 rounded-[2rem] border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/60 dark:border-white/10 dark:bg-slate-950/80">
         <button
           type="button"
           onClick={handleBackToLocations}
-          className="touch-manipulation flex items-center gap-2 rounded-2xl border border-white/5 px-4 py-2 text-sm font-bold text-slate-400 transition-all hover:border-primary-500/30 hover:text-white"
+          className="touch-manipulation flex w-full items-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-sm font-black text-slate-600 transition-all hover:border-blue-300 hover:text-blue-700 dark:border-white/10 dark:text-slate-400 dark:hover:border-primary-500/30 dark:hover:text-white"
         >
           <ArrowLeft size={18} />
           {t("floorMap.backToLocations")}
         </button>
 
-        <div className="flex items-center gap-2 glass px-4 py-2 rounded-2xl border-white/5">
-          <Building size={18} className="text-primary-400" />
+        <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+          <Building size={18} className="text-blue-600 dark:text-primary-400" />
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.selectedLocation")}</p>
-            <p className="truncate text-sm font-bold text-white">{selectedBuilding?.name}</p>
+            <p className="truncate text-sm font-black text-slate-950 dark:text-white">{selectedBuilding?.name}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 glass px-4 py-2 rounded-2xl border-white/5">
-          <Layers size={18} className="text-slate-400" />
+        <div className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <Layers size={16} className="text-blue-600 dark:text-slate-400" />
+            {t("floorMap.chooseFloor")}
+          </label>
           <select 
             data-testid="floor-map-floor-select"
-            className="min-w-0 flex-1 bg-transparent text-white text-sm font-medium focus:outline-none cursor-pointer"
+            className="w-full cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-3 text-sm font-black text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-white/10 dark:bg-slate-900 dark:text-white"
             aria-label={t("floorMap.chooseFloor")}
             onChange={(e) => handleSelectFloor(e.target.value)}
             value={selectedFloorId}
@@ -563,38 +581,53 @@ export function FloorMapPremium() {
           </select>
         </div>
 
-        <div className="flex flex-col gap-3 glass px-4 py-3 rounded-2xl border-white/5 sm:flex-row sm:items-center">
-          <Clock size={18} className="text-slate-400" />
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-2">
+        <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 dark:border-white/10 dark:bg-white/5">
+          <label className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-slate-500">
+            <Clock size={16} className="text-blue-600 dark:text-slate-400" />
+            {t("floorMap.timeRange")}
+          </label>
+          <div className="grid gap-2">
             <input 
               data-testid="floor-map-view-start"
               type="datetime-local" 
-              className="min-w-0 bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
+              className="min-w-0 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-white/10 dark:bg-slate-900 dark:text-white dark:[color-scheme:dark]"
               value={viewStart}
               onChange={(e) => setViewStart(e.target.value)}
             />
-            <span className="text-slate-600 text-xs uppercase tracking-[0.2em]">{t("floorMap.to")}</span>
             <input 
               data-testid="floor-map-view-end"
               type="datetime-local" 
-              className="min-w-0 bg-transparent text-white text-xs font-medium focus:outline-none cursor-pointer [color-scheme:dark]"
+              className="min-w-0 cursor-pointer rounded-xl border border-slate-200 bg-white px-3 py-3 text-xs font-bold text-slate-950 focus:outline-none focus:ring-2 focus:ring-blue-200 dark:border-white/10 dark:bg-slate-900 dark:text-white dark:[color-scheme:dark]"
               value={viewEnd}
               onChange={(e) => setViewEnd(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="hidden flex-1 lg:block" />
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-slate-900">
+            <p className="text-xl font-black text-slate-950 dark:text-white">{selectedFloorStats.total}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Total</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+            <p className="text-xl font-black text-emerald-600 dark:text-emerald-400">{selectedFloorStats.available}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700/70 dark:text-emerald-500/80">{t("floorMap.available")}</p>
+          </div>
+          <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 dark:border-rose-500/20 dark:bg-rose-500/10">
+            <p className="text-xl font-black text-rose-600 dark:text-rose-400">{selectedFloorStats.reserved}</p>
+            <p className="text-[10px] font-black uppercase tracking-widest text-rose-700/70 dark:text-rose-500/80">{t("floorMap.occupied")}</p>
+          </div>
+        </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 border-t border-slate-200 pt-4 dark:border-white/10">
           <StatusBadge color="bg-emerald-500" label={t("floorMap.available")} />
           <StatusBadge color="bg-red-500" label={t("floorMap.occupied")} />
         </div>
-      </div>
+      </aside>
 
       <div className="relative flex min-h-[500px] flex-col gap-6 lg:flex-1 lg:flex-row">
         {/* Map Container */}
-        <Card className="relative flex min-h-[320px] flex-1 items-center justify-center overflow-hidden border-white/5 p-4 glass-panel sm:min-h-[420px] sm:p-8 lg:min-h-0">
+        <Card className="relative flex min-h-[360px] flex-1 items-center justify-center overflow-hidden border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/70 sm:min-h-[520px] sm:p-8 lg:min-h-[620px] dark:border-white/10 dark:bg-slate-950">
           {processedSvg ? (
             <div 
               data-testid="floor-map-svg-container"
@@ -617,10 +650,10 @@ export function FloorMapPremium() {
 
           {/* Zoom Controls Overlay */}
           <div className="absolute bottom-4 left-4 flex items-center rounded-xl border-white/10 p-1 glass sm:bottom-6 sm:left-6">
-            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white transition-colors"><ZoomIn size={20} /></Button>
-            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white transition-colors"><ZoomOut size={20} /></Button>
-            <div className="w-[1px] h-6 bg-white/10 mx-1" />
-            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-white transition-colors"><Maximize2 size={20} /></Button>
+            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 transition-colors hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"><ZoomIn size={20} /></Button>
+            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 transition-colors hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"><ZoomOut size={20} /></Button>
+            <div className="mx-1 h-6 w-[1px] bg-slate-200 dark:bg-white/10" />
+            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 transition-colors hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"><Maximize2 size={20} /></Button>
           </div>
         </Card>
 
@@ -806,6 +839,7 @@ export function FloorMapPremium() {
           )}
         </AnimatePresence>
       </div>
+      </div>
     </div>
   )
 }
@@ -820,7 +854,7 @@ function BookingStepIndicator({ currentStep }: { currentStep: number }) {
   ]
 
   return (
-    <div className="rounded-[1.5rem] border border-white/5 bg-white/[0.03] p-3">
+    <div className="rounded-[1.5rem] border border-slate-200 bg-white p-3 shadow-sm shadow-slate-200/60 dark:border-white/5 dark:bg-white/[0.03]">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
         {steps.map((label, index) => {
           const stepNumber = index + 1
@@ -832,13 +866,13 @@ function BookingStepIndicator({ currentStep }: { currentStep: number }) {
               key={label}
               className={cn(
                 "flex items-center gap-3 rounded-2xl border px-3 py-3 transition-all",
-                isActive ? "border-primary-500/40 bg-primary-500/10 text-white" : "border-white/5 bg-white/[0.02] text-slate-500",
-                isDone ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-400" : "",
+                isActive ? "border-blue-200 bg-blue-50 text-blue-800 dark:border-primary-500/40 dark:bg-primary-500/10 dark:text-white" : "border-slate-200 bg-slate-50 text-slate-500 dark:border-white/5 dark:bg-white/[0.02]",
+                isDone ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-500/10 dark:text-emerald-400" : "",
               )}
             >
               <div className={cn(
                 "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-black",
-                isActive ? "bg-primary-600 text-white" : "bg-white/10 text-slate-400",
+                isActive ? "bg-blue-600 text-white dark:bg-primary-600" : "bg-slate-200 text-slate-500 dark:bg-white/10 dark:text-slate-400",
                 isDone ? "bg-emerald-500 text-white" : "",
               )}>
                 {isDone ? <CheckCircle2 size={15} /> : stepNumber}
@@ -854,9 +888,9 @@ function BookingStepIndicator({ currentStep }: { currentStep: number }) {
 
 function StatusBadge({ color, label }: { color: string, label: string }) {
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-full glass border-white/5">
+    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm dark:border-white/5 dark:bg-white/5">
       <div className={cn("w-2 h-2 rounded-full", color)} />
-      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</span>
+      <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">{label}</span>
     </div>
   )
 }

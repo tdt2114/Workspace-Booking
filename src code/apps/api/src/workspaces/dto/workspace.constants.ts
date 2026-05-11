@@ -12,3 +12,11 @@ export const WORKSPACE_STATUSES = [
   'maintenance',
   'inactive',
 ] as const;
+
+export const WORKSPACE_APPROVAL_STATUSES = [
+  'draft',
+  'pending_approval',
+  'approved',
+  'rejected',
+  'hidden',
+] as const;

@@ -1,4 +1,4 @@
-insert into public.buildings (name, address, total_floors, open_time, close_time)
+﻿insert into public.buildings (name, address, total_floors, open_time, close_time)
 select 'Head Office', 'Bangkok', 1, '08:00', '18:00'
 where not exists (
   select 1 from public.buildings where name = 'Head Office'
@@ -48,5 +48,5 @@ where not exists (
 -- Sau khi tao 3 user trong Authentication -> Users, chay phan update role nay
 -- de gan role dung cho tai khoan demo.
 update public.users set role = 'admin' where email = 'admin@demo.com';
-update public.users set role = 'manager' where email = 'manager@demo.com';
-update public.users set role = 'employee' where email = 'employee@demo.com';
+update public.users set role = 'space_owner' where email = 'space-owner@demo.com';
+update public.users set role = 'user' where email = 'user@demo.com';

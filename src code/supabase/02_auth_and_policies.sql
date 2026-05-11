@@ -10,7 +10,7 @@ begin
     new.id,
     new.email,
     coalesce(new.raw_user_meta_data->>'full_name', ''),
-    'employee'
+    'user'
   )
   on conflict (id) do update
   set
@@ -35,7 +35,7 @@ using (
   auth.uid() = id
   or exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 );
 
@@ -65,21 +65,21 @@ for select
 to authenticated
 using (true);
 
-drop policy if exists "buildings_manage_admin_manager" on public.buildings;
-create policy "buildings_manage_admin_manager"
+drop policy if exists "buildings_manage_admin_only" on public.buildings;
+create policy "buildings_manage_admin_only"
 on public.buildings
 for all
 to authenticated
 using (
   exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 )
 with check (
   exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 );
 
@@ -90,21 +90,21 @@ for select
 to authenticated
 using (true);
 
-drop policy if exists "floors_manage_admin_manager" on public.floors;
-create policy "floors_manage_admin_manager"
+drop policy if exists "floors_manage_admin_only" on public.floors;
+create policy "floors_manage_admin_only"
 on public.floors
 for all
 to authenticated
 using (
   exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 )
 with check (
   exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 );
 
@@ -113,28 +113,136 @@ create policy "workspaces_read_authenticated"
 on public.workspaces
 for select
 to authenticated
-using (true);
+using (
+  approval_status = 'approved'
+  or owner_id = auth.uid()
+  or exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+);
 
-drop policy if exists "workspaces_manage_admin_manager" on public.workspaces;
-create policy "workspaces_manage_admin_manager"
+drop policy if exists "workspaces_insert_admin_or_owner" on public.workspaces;
+create policy "workspaces_insert_admin_or_owner"
 on public.workspaces
-for all
+for insert
+to authenticated
+with check (
+  exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+  or (
+    owner_id = auth.uid()
+    and approval_status in ('draft', 'pending_approval')
+    and exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and u.role = 'space_owner'
+    )
+  )
+);
+
+drop policy if exists "workspaces_update_admin_or_owner" on public.workspaces;
+create policy "workspaces_update_admin_or_owner"
+on public.workspaces
+for update
 to authenticated
 using (
   exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+  or (
+    owner_id = auth.uid()
+    and exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and u.role = 'space_owner'
+    )
   )
 )
 with check (
   exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+  or (
+    owner_id = auth.uid()
+    and approval_status in ('draft', 'pending_approval', 'hidden')
+    and approved_by is null
+    and approved_at is null
+    and exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and u.role = 'space_owner'
+    )
   )
 );
 
-drop policy if exists "bookings_select_own_or_admin_manager" on public.bookings;
-create policy "bookings_select_own_or_admin_manager"
+drop policy if exists "workspaces_delete_admin_or_owner" on public.workspaces;
+create policy "workspaces_delete_admin_or_owner"
+on public.workspaces
+for delete
+to authenticated
+using (
+  exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+  or (
+    owner_id = auth.uid()
+    and exists (
+      select 1 from public.users u
+      where u.id = auth.uid() and u.role = 'space_owner'
+    )
+  )
+);
+
+drop policy if exists "space_owner_requests_select_own_or_admin" on public.space_owner_requests;
+create policy "space_owner_requests_select_own_or_admin"
+on public.space_owner_requests
+for select
+to authenticated
+using (
+  user_id = auth.uid()
+  or exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+);
+
+drop policy if exists "space_owner_requests_insert_own_user" on public.space_owner_requests;
+create policy "space_owner_requests_insert_own_user"
+on public.space_owner_requests
+for insert
+to authenticated
+with check (
+  user_id = auth.uid()
+  and status = 'pending'
+  and exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'user'
+  )
+);
+
+drop policy if exists "space_owner_requests_update_admin_only" on public.space_owner_requests;
+create policy "space_owner_requests_update_admin_only"
+on public.space_owner_requests
+for update
+to authenticated
+using (
+  exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+)
+with check (
+  exists (
+    select 1 from public.users u
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+);
+
+drop policy if exists "bookings_select_by_role" on public.bookings;
+create policy "bookings_select_by_role"
 on public.bookings
 for select
 to authenticated
@@ -142,7 +250,15 @@ using (
   user_id = auth.uid()
   or exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
+  )
+  or exists (
+    select 1
+    from public.users u
+    join public.workspaces w on w.id = public.bookings.workspace_id
+    where u.id = auth.uid()
+      and u.role = 'space_owner'
+      and w.owner_id = auth.uid()
   )
 );
 
@@ -155,8 +271,8 @@ with check (
   user_id = auth.uid()
 );
 
-drop policy if exists "bookings_update_own_or_admin_manager" on public.bookings;
-create policy "bookings_update_own_or_admin_manager"
+drop policy if exists "bookings_update_own_or_admin" on public.bookings;
+create policy "bookings_update_own_or_admin"
 on public.bookings
 for update
 to authenticated
@@ -164,19 +280,19 @@ using (
   user_id = auth.uid()
   or exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 )
 with check (
   user_id = auth.uid()
   or exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 );
 
-drop policy if exists "bookings_delete_own_or_admin_manager" on public.bookings;
-create policy "bookings_delete_own_or_admin_manager"
+drop policy if exists "bookings_delete_own_or_admin" on public.bookings;
+create policy "bookings_delete_own_or_admin"
 on public.bookings
 for delete
 to authenticated
@@ -184,6 +300,6 @@ using (
   user_id = auth.uid()
   or exists (
     select 1 from public.users u
-    where u.id = auth.uid() and u.role in ('admin', 'manager')
+    where u.id = auth.uid() and u.role = 'admin'
   )
 );

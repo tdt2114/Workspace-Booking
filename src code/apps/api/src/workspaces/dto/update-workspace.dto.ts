@@ -8,7 +8,11 @@ import {
   Max,
   Min,
 } from 'class-validator';
-import { WORKSPACE_STATUSES, WORKSPACE_TYPES } from './workspace.constants';
+import {
+  WORKSPACE_APPROVAL_STATUSES,
+  WORKSPACE_STATUSES,
+  WORKSPACE_TYPES,
+} from './workspace.constants';
 
 export class UpdateWorkspaceDto {
   @IsOptional()
@@ -26,6 +30,14 @@ export class UpdateWorkspaceDto {
   @IsOptional()
   @IsIn(WORKSPACE_STATUSES)
   status?: (typeof WORKSPACE_STATUSES)[number];
+
+  @IsOptional()
+  @IsIn(WORKSPACE_APPROVAL_STATUSES)
+  approvalStatus?: (typeof WORKSPACE_APPROVAL_STATUSES)[number];
+
+  @IsOptional()
+  @IsString()
+  rejectionReason?: string;
 
   @IsOptional()
   @IsString()

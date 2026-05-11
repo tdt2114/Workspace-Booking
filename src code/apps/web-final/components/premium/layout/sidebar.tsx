@@ -39,14 +39,15 @@ export function Sidebar() {
     checkRole()
   }, [])
 
-  const isAdmin = role === 'admin' || role === 'manager'
+  const isAdmin = role === 'admin'
+  const isSpaceOwner = role === 'space_owner'
 
   const menuItems = [
     { icon: LayoutDashboard, label: t("legacy.dashboard"), href: "/dashboard", show: true },
     { icon: Map, label: t("legacy.floorMap"), href: "/floor-map", show: true },
     { icon: CalendarRange, label: t("legacy.myBookings"), href: "/bookings", show: true },
-    { icon: QrCode, label: t("legacy.qrManager"), href: "/workspace-qr", show: isAdmin },
-    { icon: Settings, label: t("legacy.systemSetup"), href: "/admin/setup", show: isAdmin },
+    { icon: Settings, label: isSpaceOwner ? "My Spaces" : t("legacy.systemSetup"), href: "/admin/setup", show: isAdmin || isSpaceOwner },
+    { icon: QrCode, label: t("legacy.qrAssets"), href: "/workspace-qr", show: isAdmin },
   ]
 
   async function handleSignOut() {

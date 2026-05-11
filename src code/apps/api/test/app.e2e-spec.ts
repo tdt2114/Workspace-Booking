@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
+﻿/* eslint-disable @typescript-eslint/no-unsafe-argument */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 
 import {
@@ -15,7 +15,7 @@ import { BookingsService } from './../src/bookings/bookings.service';
 type TestUser = {
   id: string;
   email: string;
-  role: 'admin' | 'manager' | 'employee';
+  role: 'admin' | 'space_owner' | 'user';
   fullName: string;
 };
 
@@ -26,17 +26,17 @@ const USERS_BY_TOKEN: Record<string, TestUser> = {
     role: 'admin',
     fullName: 'Admin Demo',
   },
-  'manager-token': {
+  'space-owner-token': {
     id: '22222222-2222-2222-2222-222222222222',
-    email: 'manager@demo.com',
-    role: 'manager',
-    fullName: 'Manager Demo',
+    email: 'space-owner@demo.com',
+    role: 'space_owner',
+    fullName: 'Space Owner Demo',
   },
-  'employee-token': {
+  'user-token': {
     id: '33333333-3333-3333-3333-333333333333',
-    email: 'employee@demo.com',
-    role: 'employee',
-    fullName: 'Employee Demo',
+    email: 'user@demo.com',
+    role: 'user',
+    fullName: 'User Demo',
   },
 };
 
@@ -127,11 +127,11 @@ describe('API booking flows (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get('/bookings/my')
-      .set('Authorization', 'Bearer employee-token')
+      .set('Authorization', 'Bearer user-token')
       .expect(200);
 
     expect(bookingsServiceMock.findMine).toHaveBeenCalledWith(
-      USERS_BY_TOKEN['employee-token'].id,
+      USERS_BY_TOKEN['user-token'].id,
     );
     expect(response.body).toEqual({
       count: 1,
@@ -159,12 +159,12 @@ describe('API booking flows (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .post('/bookings')
-      .set('Authorization', 'Bearer employee-token')
+      .set('Authorization', 'Bearer user-token')
       .send(payload)
       .expect(201);
 
     expect(bookingsServiceMock.create).toHaveBeenCalledWith(
-      USERS_BY_TOKEN['employee-token'],
+      USERS_BY_TOKEN['user-token'],
       payload,
     );
     expect(response.body).toEqual({
@@ -188,13 +188,13 @@ describe('API booking flows (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .patch(`/bookings/${bookingId}/cancel`)
-      .set('Authorization', 'Bearer employee-token')
+      .set('Authorization', 'Bearer user-token')
       .send(payload)
       .expect(200);
 
     expect(bookingsServiceMock.cancel).toHaveBeenCalledWith(
       bookingId,
-      USERS_BY_TOKEN['employee-token'],
+      USERS_BY_TOKEN['user-token'],
       payload,
     );
     expect(response.body).toEqual({
@@ -204,7 +204,7 @@ describe('API booking flows (e2e)', () => {
     });
   });
 
-  it('GET /bookings/manage is available for manager users', async () => {
+  it('GET /bookings/manage is available for space owner users', async () => {
     bookingsServiceMock.findManageable.mockResolvedValue({
       count: 2,
       items: [
@@ -215,17 +215,19 @@ describe('API booking flows (e2e)', () => {
 
     const response = await request(app.getHttpServer())
       .get('/bookings/manage')
-      .set('Authorization', 'Bearer manager-token')
+      .set('Authorization', 'Bearer space-owner-token')
       .expect(200);
 
-    expect(bookingsServiceMock.findManageable).toHaveBeenCalledTimes(1);
+    expect(bookingsServiceMock.findManageable).toHaveBeenCalledWith(
+      USERS_BY_TOKEN['space-owner-token'],
+    );
     expect(response.body.count).toBe(2);
   });
 
-  it('POST /bookings/run-no-show rejects employee users', async () => {
+  it('POST /bookings/run-no-show rejects regular users', async () => {
     await request(app.getHttpServer())
       .post('/bookings/run-no-show')
-      .set('Authorization', 'Bearer employee-token')
+      .set('Authorization', 'Bearer user-token')
       .send({
         effectiveAt: '2026-04-22T12:00:00.000Z',
       })
@@ -234,27 +236,16 @@ describe('API booking flows (e2e)', () => {
     expect(bookingsServiceMock.runNoShow).not.toHaveBeenCalled();
   });
 
-  it('POST /bookings/run-no-show works for manager users', async () => {
-    bookingsServiceMock.runNoShow.mockResolvedValue({
-      effectiveAt: '2026-04-22T12:00:00.000Z',
-      count: 1,
-      items: [
-        { id: '99999999-9999-9999-9999-999999999999', status: 'no_show' },
-      ],
-    });
-
-    const payload = {
-      effectiveAt: '2026-04-22T12:00:00.000Z',
-    };
-
-    const response = await request(app.getHttpServer())
+  it('POST /bookings/run-no-show rejects space owner users', async () => {
+    await request(app.getHttpServer())
       .post('/bookings/run-no-show')
-      .set('Authorization', 'Bearer manager-token')
-      .send(payload)
-      .expect(201);
+      .set('Authorization', 'Bearer space-owner-token')
+      .send({
+        effectiveAt: '2026-04-22T12:00:00.000Z',
+      })
+      .expect(403);
 
-    expect(bookingsServiceMock.runNoShow).toHaveBeenCalledWith(payload);
-    expect(response.body.count).toBe(1);
+    expect(bookingsServiceMock.runNoShow).not.toHaveBeenCalled();
   });
 
   it('POST /bookings/run-completed works for admin users', async () => {

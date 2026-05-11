@@ -3,12 +3,12 @@ import { loginAsRole, requireRoleCredentials } from "./fixtures";
 
 test.describe("booking role access", () => {
   test.skip(
-    requireRoleCredentials(["employee", "manager", "admin"]),
-    "Set employee, manager and admin E2E credentials before running role-access E2E tests.",
+    requireRoleCredentials(["user", "space_owner", "admin"]),
+    "Set user, space owner and admin E2E credentials before running role-access E2E tests.",
   );
 
-  test("employee cannot access system maintenance tools", async ({ page }) => {
-    await loginAsRole(page, "employee");
+  test("user cannot access system maintenance tools", async ({ page }) => {
+    await loginAsRole(page, "user");
 
     await page.goto("/bookings");
     await expect(page.getByTestId("bookings-page")).toBeVisible();
@@ -17,15 +17,15 @@ test.describe("booking role access", () => {
     await expect(page.getByTestId("bookings-system-section")).toHaveCount(0);
   });
 
-  test("manager can access system maintenance tools", async ({ page }) => {
-    await loginAsRole(page, "manager");
+  test("space owner can view managed bookings but cannot access system maintenance tools", async ({ page }) => {
+    await loginAsRole(page, "space_owner");
 
     await page.goto("/bookings");
     await expect(page.getByTestId("bookings-page")).toBeVisible();
     await page.getByTestId("bookings-tab-system").click();
-    await expect(page.getByTestId("bookings-system-section")).toBeVisible();
-    await expect(page.getByTestId("bookings-run-no-show")).toBeVisible();
-    await expect(page.getByTestId("bookings-run-completed")).toBeVisible();
+    await expect(page.getByTestId("bookings-system-section")).toHaveCount(0);
+    await expect(page.getByTestId("bookings-run-no-show")).toHaveCount(0);
+    await expect(page.getByTestId("bookings-run-completed")).toHaveCount(0);
   });
 
   test("admin can access system maintenance tools", async ({ page }) => {

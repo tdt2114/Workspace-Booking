@@ -18,6 +18,9 @@ if (-not (Get-Command cloudflared -ErrorAction SilentlyContinue)) {
   throw "cloudflared was not found in PATH. Install it first or reopen the terminal."
 }
 
+$tunnelMaxAttempts = 5
+$tunnelRetryDelaySeconds = 6
+
 $env:NEXT_PUBLIC_API_BASE_URL = "/api"
 $env:API_PROXY_TARGET = "http://127.0.0.1:3001"
 
@@ -55,7 +58,26 @@ try {
   Write-Host "Leave this terminal open while testing. Run 'npm run mobile:down' in another terminal to stop the session." -ForegroundColor Yellow
   Write-Host ""
 
-  & cloudflared tunnel --url http://localhost:3002
+  for ($attempt = 1; $attempt -le $tunnelMaxAttempts; $attempt++) {
+    Write-Host "Starting Cloudflare quick tunnel (attempt $attempt/$tunnelMaxAttempts)..." -ForegroundColor Cyan
+    & cloudflared tunnel --url http://localhost:3002
+    $exitCode = $LASTEXITCODE
+
+    if ($exitCode -eq 0) {
+      break
+    }
+
+    if ($attempt -lt $tunnelMaxAttempts) {
+      Write-Host ""
+      Write-Host "Cloudflare quick tunnel failed with exit code $exitCode. Retrying in $tunnelRetryDelaySeconds seconds..." -ForegroundColor Yellow
+      Write-Host "The local API and web preview are still running; this usually means trycloudflare.com returned a temporary 500/1101." -ForegroundColor Yellow
+      Start-Sleep -Seconds $tunnelRetryDelaySeconds
+      Write-Host ""
+      continue
+    }
+
+    throw "Cloudflare quick tunnel failed after $tunnelMaxAttempts attempts. Local preview is healthy at http://localhost:3002/login, but mobile HTTPS tunnel could not be created."
+  }
 } catch {
   Write-Host $_ -ForegroundColor Red
   throw

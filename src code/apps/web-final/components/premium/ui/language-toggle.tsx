@@ -20,7 +20,11 @@ export function LanguageToggle({ className }: LanguageToggleProps) {
       aria-label={t("common.switchLanguage")}
       title={t("common.switchLanguage")}
       onClick={toggleLocale}
-      className={cn("gap-2 rounded-full px-3 text-slate-400 hover:text-white", className)}
+      className={cn(
+        "gap-2 rounded-full border border-slate-200 bg-white px-3 font-black text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+        "dark:border-white/10 dark:bg-white/10 dark:text-slate-100 dark:hover:bg-white/15 dark:hover:text-white",
+        className
+      )}
     >
       <Languages size={18} />
       <span className="text-xs font-black tracking-widest">{nextLocale}</span>

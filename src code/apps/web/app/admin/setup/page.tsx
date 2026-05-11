@@ -11,7 +11,7 @@ import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 type Profile = {
   id: string;
   email: string;
-  role: "admin" | "manager" | "employee";
+  role: "admin" | "space_owner" | "user";
   fullName: string;
 };
 
@@ -246,7 +246,7 @@ export default function AdminSetupPage() {
   const [svgAnalysisError, setSvgAnalysisError] = useState<string | null>(null);
 
   const canManageSetup =
-    profile?.role === "admin" || profile?.role === "manager";
+    profile?.role === "admin" || profile?.role === "space_owner";
 
   const floorsWithBuilding = useMemo(() => {
     return floors.map((floor) => {
@@ -343,13 +343,14 @@ export default function AdminSetupPage() {
       return;
     }
 
+    const accessToken = session.access_token;
     let active = true;
 
     async function loadProfile() {
       try {
         const response = await fetch(`${apiBaseUrl}/me`, {
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
         });
 
@@ -946,7 +947,7 @@ export default function AdminSetupPage() {
                 This is the next MVP operations screen. It keeps the current prototype
                 style, but moves day-to-day setup for buildings, floors,
                 workspaces, and SVG floor maps into the web app so admin and
-                manager accounts do not need to
+                space owner accounts do not need to
                 rely on Supabase dashboard or manual API calls.
               </p>
             </div>
@@ -968,7 +969,7 @@ export default function AdminSetupPage() {
                 className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700"
                 href="/workspace-qr"
               >
-                Open QR Manager
+                Open QR Assets
               </Link>
             </div>
           </div>
@@ -1058,7 +1059,7 @@ export default function AdminSetupPage() {
 
               {!canManageSetup && !loadingSession ? (
                 <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  Only admin or manager accounts can use this setup screen.
+                  Only admin or space owner accounts can use this setup screen.
                 </p>
               ) : null}
             </section>

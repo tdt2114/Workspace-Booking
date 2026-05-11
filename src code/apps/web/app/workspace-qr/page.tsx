@@ -12,7 +12,7 @@ import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
 type AuthProfile = {
   id: string;
   email: string;
-  role: "admin" | "manager" | "employee";
+  role: "admin" | "space_owner" | "user";
   fullName: string;
 };
 
@@ -301,7 +301,7 @@ export default function WorkspaceQrPage() {
   }
 
   const canManageQr =
-    profile?.role === "admin" || profile?.role === "manager";
+    profile?.role === "admin" || profile?.role === "space_owner";
 
   return (
     <main className="min-h-screen px-6 py-12">
@@ -394,7 +394,7 @@ export default function WorkspaceQrPage() {
                 </p>
               ) : !canManageQr ? (
                 <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  Only admin or manager accounts can access QR management.
+                  Only admin accounts can access QR assets.
                 </p>
               ) : filteredWorkspaces.length === 0 ? (
                 <p className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">

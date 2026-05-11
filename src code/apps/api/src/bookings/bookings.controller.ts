@@ -33,14 +33,14 @@ export class BookingsController {
 
   @Get('manage')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
-  findManageable() {
-    return this.bookingsService.findManageable();
+  @Roles('admin', 'space_owner')
+  findManageable(@CurrentUser() user: AuthenticatedUser) {
+    return this.bookingsService.findManageable(user);
   }
 
   @Get('analytics')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
+  @Roles('admin')
   getAnalytics() {
     return this.bookingsService.getAnalytics();
   }
@@ -80,14 +80,14 @@ export class BookingsController {
 
   @Post('run-no-show')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
+  @Roles('admin')
   runNoShow(@Body() dto: RunNoShowDto) {
     return this.bookingsService.runNoShow(dto);
   }
 
   @Post('run-completed')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
+  @Roles('admin')
   runCompleted(@Body() dto: RunCompletionDto) {
     return this.bookingsService.runCompleted(dto);
   }

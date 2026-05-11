@@ -28,14 +28,14 @@ export class BuildingsController {
 
   @Post()
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
+  @Roles('admin')
   create(@Body() dto: CreateBuildingDto) {
     return this.buildingsService.create(dto);
   }
 
   @Patch(':id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
+  @Roles('admin')
   update(
     @Param('id', new ParseUUIDPipe()) id: string,
     @Body() dto: UpdateBuildingDto,
@@ -45,7 +45,7 @@ export class BuildingsController {
 
   @Delete(':id')
   @UseGuards(RolesGuard)
-  @Roles('admin', 'manager')
+  @Roles('admin')
   remove(@Param('id', new ParseUUIDPipe()) id: string) {
     return this.buildingsService.remove(id);
   }

@@ -132,7 +132,7 @@ export default function BookingsPage() {
   const [loading, setLoading] = React.useState(true)
   const [actionLoading, setActionLoading] = React.useState<string | null>(null)
   const [search, setSearch] = React.useState("")
-  const [isAdmin, setIsAdmin] = React.useState(false)
+  const [role, setRole] = React.useState<string | null>(null)
   const [currentTime, setCurrentTime] = React.useState(() => Date.now())
   const [analytics, setAnalytics] = React.useState<AnalyticsResponse | null>(null)
   const [analyticsLoading, setAnalyticsLoading] = React.useState(false)
@@ -172,7 +172,7 @@ export default function BookingsPage() {
         if (tab === "my") setBookings(data.items || [])
         else {
           setSystemBookings(data.items || [])
-          void loadAnalytics(token)
+          if (role === "admin") void loadAnalytics(token)
         }
       } else {
         const message = await readApiError(res, t("bookings.loadFailed"))
@@ -185,7 +185,7 @@ export default function BookingsPage() {
       setCurrentTime(Date.now())
       setLoading(false)
     }
-  }, [apiBaseUrl, loadAnalytics, t, toast])
+  }, [apiBaseUrl, loadAnalytics, role, t, toast])
 
   React.useEffect(() => {
     const bootstrap = async () => {
@@ -197,7 +197,7 @@ export default function BookingsPage() {
           headers: { Authorization: `Bearer ${currentSession.access_token}` }
         })
         const meData = await meRes.json() as MeResponse
-        setIsAdmin(meData.role === 'admin' || meData.role === 'manager')
+        setRole(meData.role ?? null)
         void loadData(currentSession.access_token, activeTab)
       }
     }
@@ -252,6 +252,9 @@ export default function BookingsPage() {
     (b.workspace_name || "").toLowerCase().includes(search.toLowerCase()) ||
     (b.user_email || "").toLowerCase().includes(search.toLowerCase())
   )
+  const isAdmin = role === "admin"
+  const isSpaceOwner = role === "space_owner"
+  const canViewManagedBookings = isAdmin || isSpaceOwner
 
   const stats = React.useMemo(() => {
     const list = activeTab === "my" ? bookings : systemBookings
@@ -269,40 +272,43 @@ export default function BookingsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-8" data-testid="bookings-page">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 text-slate-950 shadow-sm shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100">
+        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
           <div>
-            <h1 className="text-3xl font-black text-white mb-2 tracking-tight">{t("bookings.title")}</h1>
-            <p className="text-slate-400 font-medium">{t("bookings.subtitle")}</p>
+            <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-600">Reservations</p>
+            <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 md:text-4xl dark:text-white">{t("bookings.title")}</h1>
+            <p className="mt-2 max-w-3xl text-sm font-semibold text-slate-500 md:text-base dark:text-slate-400">{t("bookings.subtitle")}</p>
           </div>
-          <div className="flex items-center gap-2 glass p-1.5 rounded-2xl border-white/5">
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 dark:border-white/10 dark:bg-white/5">
             <button 
               data-testid="bookings-tab-my"
               onClick={() => setActiveTab("my")}
               className={cn(
-                "px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
-                activeTab === "my" ? "bg-primary-600 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"
+                "flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black transition-all",
+                activeTab === "my" ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
               )}
             >
               <History size={18} />
               {t("bookings.myHistory")}
             </button>
-            {isAdmin && (
+            {canViewManagedBookings && (
               <button 
                 data-testid="bookings-tab-system"
                 onClick={() => setActiveTab("system")}
                 className={cn(
-                  "px-5 py-2.5 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
-                  activeTab === "system" ? "bg-primary-600 text-white shadow-lg" : "text-slate-400 hover:text-white hover:bg-white/5"
+                  "flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black transition-all",
+                  activeTab === "system" ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
                 )}
               >
                 <ShieldCheck size={18} />
-                {t("bookings.globalAccess")}
+                {isAdmin ? t("bookings.globalAccess") : tFallback(t, "bookings.ownerAccess", "My spaces")}
               </button>
             )}
           </div>
         </div>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label={t("bookings.stats.total")} value={stats.total} icon={<Calendar className="text-blue-500" size={20} />} />
           <StatCard label={tFallback(t, "bookings.stats.upcoming", "Upcoming")} value={stats.upcoming} icon={<Clock className="text-blue-500" size={20} />} />
           <StatCard label={t("bookings.stats.live")} value={stats.active} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
@@ -319,13 +325,13 @@ export default function BookingsPage() {
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -10 }}
-            className="grid grid-cols-1 lg:grid-cols-3 gap-8"
+            className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]"
           >
-            <Card className="lg:col-span-2 glass-panel border-white/10 flex flex-col h-fit">
+            <Card className="flex h-fit flex-col border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 xl:col-span-1">
               <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <CardTitle>{activeTab === "my" ? t("bookings.yourReservations") : t("bookings.systemRecords")}</CardTitle>
-                  <CardDescription>{t("bookings.filtering").replace("{count}", String(displayedBookings.length))}</CardDescription>
+                  <CardTitle className="text-2xl font-black text-slate-950 dark:text-white">{activeTab === "my" ? t("bookings.yourReservations") : t("bookings.systemRecords")}</CardTitle>
+                  <CardDescription className="font-semibold text-slate-500">{t("bookings.filtering").replace("{count}", String(displayedBookings.length))}</CardDescription>
                 </div>
                 <div className="relative group">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-primary-500 transition-colors" size={16} />
@@ -334,14 +340,14 @@ export default function BookingsPage() {
                     placeholder={t("bookings.searchPlaceholder")}
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9 h-10 w-full sm:w-64 bg-white/5 border-white/10 rounded-xl focus:border-primary-500" 
+                    className="h-11 w-full rounded-xl border-slate-200 bg-slate-50 pl-9 font-semibold text-slate-950 focus:border-blue-500 sm:w-72 dark:border-white/10 dark:bg-white/5 dark:text-white" 
                   />
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 pb-8">
                 {loading ? (
                   <div className="flex justify-center py-20">
-                    <Loader2 className="w-10 h-10 text-primary-500 animate-spin opacity-20" />
+                    <Loader2 className="h-10 w-10 animate-spin text-blue-500 opacity-40" />
                   </div>
                 ) : displayedBookings.length > 0 ? (
                   displayedBookings.map((b) => (
@@ -354,9 +360,9 @@ export default function BookingsPage() {
                     />
                   ))
                 ) : (
-                  <div className="py-20 text-center space-y-4 opacity-20">
-                    <Calendar size={64} className="mx-auto" />
-                    <p className="font-bold">{t("bookings.empty")}</p>
+                  <div className="space-y-4 py-20 text-center text-slate-400">
+                    <Calendar size={64} className="mx-auto opacity-60" />
+                    <p className="font-bold text-slate-600 dark:text-slate-400">{t("bookings.empty")}</p>
                   </div>
                 )}
               </CardContent>
@@ -365,20 +371,20 @@ export default function BookingsPage() {
             <aside className="space-y-6">
               {activeTab === "system" && isAdmin && (
                 <>
-                  <Card data-testid="bookings-system-section" className="glass-panel border-primary-500/20 bg-primary-500/5 overflow-hidden">
-                    <CardHeader className="bg-primary-500/10">
-                      <CardTitle className="text-lg flex items-center gap-2">
-                        <Settings2 size={20} className="text-primary-500" />
+                  <Card data-testid="bookings-system-section" className="overflow-hidden border-blue-200 bg-white text-slate-950 shadow-sm shadow-blue-100/70 dark:border-primary-500/20 dark:bg-slate-900 dark:text-slate-100">
+                    <CardHeader className="border-b border-blue-100 bg-blue-50 dark:border-white/10 dark:bg-slate-800">
+                      <CardTitle className="flex items-center gap-2 text-lg font-black text-slate-950 dark:text-white">
+                        <Settings2 size={20} className="text-blue-600 dark:text-primary-500" />
                         {t("bookings.maintenanceTools")}
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="p-6 space-y-6">
-                      <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="space-y-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-500/10">
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.noShowCleanup")}</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-amber-700 dark:text-slate-500">{t("bookings.noShowCleanup")}</span>
                           <div className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.noShowDescription")}</p>
+                        <p className="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-400">{t("bookings.noShowDescription")}</p>
                         <Button 
                           data-testid="bookings-run-no-show"
                           onClick={() => handleAction('bulk', 'no-show')}
@@ -391,11 +397,11 @@ export default function BookingsPage() {
                         </Button>
                       </div>
 
-                      <div className="space-y-3 p-4 rounded-2xl bg-white/5 border border-white/5">
+                      <div className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
                         <div className="flex justify-between items-center">
-                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("bookings.archiveJob")}</span>
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-slate-500">{t("bookings.archiveJob")}</span>
                         </div>
-                        <p className="text-xs text-slate-400 leading-relaxed font-medium">{t("bookings.archiveDescription")}</p>
+                        <p className="text-xs font-semibold leading-relaxed text-slate-600 dark:text-slate-400">{t("bookings.archiveDescription")}</p>
                         <Button 
                           data-testid="bookings-run-completed"
                           onClick={() => handleAction('bulk', 'complete')}
@@ -412,19 +418,19 @@ export default function BookingsPage() {
                 </>
               )}
 
-              <Card className="glass-panel border-white/5">
+              <Card className="border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100">
                 <CardHeader>
-                  <CardTitle className="text-lg">{t("bookings.quotaStatus")}</CardTitle>
+                  <CardTitle className="text-lg font-black text-slate-950 dark:text-white">{t("bookings.quotaStatus")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex justify-between text-xs font-bold mb-1">
                     <span className="text-slate-500">{t("bookings.activeBookings")}</span>
-                    <span className="text-white">{stats.active + stats.upcoming}/5</span>
+                    <span className="text-slate-950 dark:text-white">{stats.active + stats.upcoming}/5</span>
                   </div>
-                  <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full bg-primary-500 rounded-full" style={{ width: `${Math.min(((stats.active + stats.upcoming) / 5) * 100, 100)}%` }} />
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100 dark:bg-white/5">
+                    <div className="h-full rounded-full bg-blue-600" style={{ width: `${Math.min(((stats.active + stats.upcoming) / 5) * 100, 100)}%` }} />
                   </div>
-                  <div className="flex gap-3 pt-4 border-t border-white/5">
+                  <div className="flex gap-3 border-t border-slate-100 pt-4 dark:border-white/5">
                     <Info size={16} className="text-slate-500 shrink-0" />
                     <p className="text-[10px] text-slate-500 leading-relaxed font-medium uppercase tracking-tight">{t("bookings.quotaInfo")}</p>
                   </div>
@@ -449,13 +455,13 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
   const dailyTotal = dailyVolume.reduce((sum, item) => sum + item.count, 0)
 
   return (
-    <Card data-testid="bookings-analytics-section" className="glass-panel overflow-hidden border-emerald-500/20 bg-emerald-500/5">
-      <CardHeader className="bg-emerald-500/10">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <BarChart3 size={20} className="text-emerald-500" />
+    <Card data-testid="bookings-analytics-section" className="overflow-hidden border-emerald-200 bg-white text-slate-950 shadow-sm shadow-emerald-100/70 dark:border-emerald-500/20 dark:bg-slate-900 dark:text-slate-100">
+      <CardHeader className="border-b border-emerald-100 bg-emerald-50 dark:border-white/10 dark:bg-slate-800">
+        <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950 dark:text-white">
+          <BarChart3 size={22} className="text-emerald-600 dark:text-emerald-500" />
           {tFallback(t, "bookings.analytics.title", "Workspace Analytics")}
         </CardTitle>
-        <CardDescription>
+        <CardDescription className="font-semibold text-slate-600 dark:text-slate-400">
           {analytics
             ? tFallback(t, "bookings.analytics.generated", "Generated at {time}").replace("{time}", new Date(analytics.generatedAt).toLocaleTimeString())
             : tFallback(t, "bookings.analytics.subtitle", "Occupancy and usage snapshot.")}
@@ -496,7 +502,7 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
             </div>
 
             <div className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
-              <div className="space-y-4 rounded-2xl border border-white/5 bg-white/5 p-5">
+              <div className="space-y-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 dark:border-white/10 dark:bg-slate-800">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
@@ -506,7 +512,7 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
                     {tFallback(t, "bookings.analytics.bookingVolumeHint", "Recent demand by day and week.")}
                   </p>
                 </div>
-                <span className="rounded-full border border-primary-500/20 bg-primary-500/10 px-3 py-1 text-sm font-black text-primary-500">
+                <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-black text-blue-600 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-500">
                   {dailyTotal}
                 </span>
               </div>
@@ -514,34 +520,34 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
                 label={tFallback(t, "bookings.analytics.dailyVolume", "Last 7 days")}
                 items={dailyVolume}
               />
-              <div className="grid grid-cols-2 gap-3 border-t border-white/5 pt-3">
-                <div className="rounded-xl bg-white/5 p-3">
+              <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 dark:border-white/5">
+                <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                     {tFallback(t, "bookings.analytics.sixWeekTotal", "6-week total")}
                   </p>
-                  <p className="mt-1 text-xl font-black text-white">{weeklyTotal}</p>
+                  <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">{weeklyTotal}</p>
                 </div>
-                <div className="rounded-xl bg-white/5 p-3">
+                <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
                     {tFallback(t, "bookings.analytics.weeklyPeak", "Weekly peak")}
                   </p>
-                  <p className="mt-1 text-xl font-black text-white">{weeklyPeak}</p>
+                  <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">{weeklyPeak}</p>
                 </div>
               </div>
             </div>
 
               <div className="space-y-5">
-                <div className="space-y-3 rounded-2xl border border-white/5 bg-white/5 p-4">
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                   {tFallback(t, "bookings.analytics.topSpaces", "Top used spaces")}
                 </p>
                 {(analytics.topWorkspaces.length ? analytics.topWorkspaces.slice(0, 3) : []).map((workspace) => (
                   <div key={workspace.workspaceId} className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <p className="truncate text-sm font-black text-white">{workspace.workspaceName}</p>
+                      <p className="truncate text-sm font-black text-slate-950 dark:text-white">{workspace.workspaceName}</p>
                       <p className="truncate text-[10px] font-bold text-slate-500">{workspace.buildingName} • {workspace.floorName}</p>
                     </div>
-                    <span className="rounded-full border border-primary-500/20 bg-primary-500/10 px-3 py-1 text-xs font-black text-primary-500">
+                    <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-600 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-500">
                       {workspace.bookingCount}
                     </span>
                   </div>
@@ -551,20 +557,20 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
                 )}
               </div>
 
-                <div className="space-y-3 rounded-2xl border border-white/5 bg-white/5 p-4">
+                <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
                   {tFallback(t, "bookings.analytics.floorUtilization", "Floor utilization")}
                 </p>
                 {topFloors.map((floor) => (
                   <div key={floor.floorId} className="space-y-2">
                     <div className="flex items-center justify-between gap-3 text-xs font-bold">
-                      <span className="flex min-w-0 items-center gap-2 text-white">
-                        <Building2 size={14} className="shrink-0 text-primary-500" />
+                      <span className="flex min-w-0 items-center gap-2 text-slate-950 dark:text-white">
+                        <Building2 size={14} className="shrink-0 text-blue-600 dark:text-primary-500" />
                         <span className="truncate">{floor.buildingName} • {floor.floorName}</span>
                       </span>
                       <span className="text-slate-400">{floor.occupiedCount}/{floor.workspaceCount}</span>
                     </div>
-                    <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200 dark:bg-white/5">
                       <div className="h-full rounded-full bg-emerald-500" style={{ width: `${floor.utilizationRate}%` }} />
                     </div>
                   </div>
@@ -598,14 +604,14 @@ function AnalyticsVolumeBars({
       <div className="grid grid-cols-7 gap-2">
         {items.map((item) => (
           <div key={item.periodStart} className="space-y-2">
-            <div className="flex h-20 items-end rounded-xl bg-white/5 p-1.5">
+            <div className="flex h-20 items-end rounded-xl bg-white p-1.5 dark:bg-slate-900">
               <div
-                className="w-full rounded-lg bg-primary-500 transition-all"
+                className="w-full rounded-lg bg-blue-600 transition-all dark:bg-primary-500"
                 style={{ height: `${Math.max((item.count / maxCount) * 100, item.count > 0 ? 18 : 4)}%` }}
               />
             </div>
             <div className="text-center">
-              <p className="text-sm font-black text-white">{item.count}</p>
+              <p className="text-sm font-black text-slate-950 dark:text-white">{item.count}</p>
               <p className="truncate text-[10px] font-bold text-slate-500">{item.label}</p>
             </div>
           </div>
@@ -627,33 +633,33 @@ function AnalyticsMetric({
   tone: "amber" | "blue" | "emerald"
 }) {
   const toneClass = {
-    amber: "text-amber-500 bg-amber-500/10 border-amber-500/20",
-    blue: "text-blue-500 bg-blue-500/10 border-blue-500/20",
-    emerald: "text-emerald-500 bg-emerald-500/10 border-emerald-500/20",
+    amber: "text-amber-600 bg-amber-50 border-amber-200 dark:text-amber-500 dark:bg-amber-500/10 dark:border-amber-500/20",
+    blue: "text-blue-600 bg-blue-50 border-blue-200 dark:text-blue-500 dark:bg-blue-500/10 dark:border-blue-500/20",
+    emerald: "text-emerald-600 bg-emerald-50 border-emerald-200 dark:text-emerald-500 dark:bg-emerald-500/10 dark:border-emerald-500/20",
   }[tone]
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/5 p-4">
+    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-800">
       <div className={cn("mb-3 flex h-9 w-9 items-center justify-center rounded-xl border", toneClass)}>
         {icon}
       </div>
       <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{label}</p>
-      <p className="mt-1 text-2xl font-black text-white">{value}</p>
+      <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{value}</p>
     </div>
   )
 }
 
 function StatCard({ label, value, icon }: StatCardProps) {
   return (
-    <Card className="glass-panel border-white/5 hover:border-white/10 transition-all hover:scale-105 duration-300">
+    <Card className="border-slate-200 bg-white text-slate-950 shadow-sm shadow-slate-200/70 transition-all duration-300 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-blue-100 dark:border-white/10 dark:bg-slate-900 dark:text-slate-100 dark:hover:border-white/20">
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-4">
           <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">{label}</p>
-          <div className="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center border border-white/5 shadow-inner">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 shadow-inner dark:border-white/10 dark:bg-slate-800">
             {icon}
           </div>
         </div>
-        <p className="text-3xl font-black text-white">{value}</p>
+        <p className="text-3xl font-black text-slate-950 dark:text-white">{value}</p>
       </CardContent>
     </Card>
   )
@@ -663,19 +669,19 @@ function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemPro
   const { locale, t } = useLanguage()
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const statusConfig: BookingStatusConfig = {
-    upcoming: { label: tFallback(t, "bookings.status.upcoming", "Upcoming"), className: "bg-blue-500/10 text-blue-500 border-blue-500/20" },
-    active: { label: tFallback(t, "bookings.status.active", "Active"), className: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20" },
-    checkedIn: { label: t("bookings.status.checkedIn"), className: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" },
-    completed: { label: t("bookings.status.completed"), className: "bg-slate-500/10 text-slate-400 border-white/5" },
-    cancelled: { label: t("bookings.status.cancelled"), className: "bg-rose-500/10 text-rose-500 border-rose-500/20" },
-    noShow: { label: t("bookings.status.noShow"), className: "bg-amber-500/10 text-amber-500 border-amber-500/20" },
+    upcoming: { label: tFallback(t, "bookings.status.upcoming", "Upcoming"), className: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20" },
+    active: { label: tFallback(t, "bookings.status.active", "Active"), className: "bg-cyan-50 text-cyan-600 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20" },
+    checkedIn: { label: t("bookings.status.checkedIn"), className: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-500 dark:border-emerald-500/20" },
+    completed: { label: t("bookings.status.completed"), className: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-white/5" },
+    cancelled: { label: t("bookings.status.cancelled"), className: "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-500 dark:border-rose-500/20" },
+    noShow: { label: t("bookings.status.noShow"), className: "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-500 dark:border-amber-500/20" },
   }
 
   const displayStatus = getBookingDisplayStatus(booking, now)
   const cfg = statusConfig[displayStatus]
 
   return (
-    <div className="group flex flex-col sm:flex-row sm:items-center justify-between p-5 rounded-2xl border border-white/5 bg-white/5 hover:border-primary-500/30 transition-all gap-4">
+    <div className="group flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all hover:border-blue-200 hover:bg-white sm:flex-row sm:items-center dark:border-white/10 dark:bg-slate-800 dark:hover:border-primary-500/30">
       <div className="flex items-center gap-5">
         <div className={cn(
           "w-14 h-14 rounded-2xl flex items-center justify-center border-2 transition-all group-hover:scale-110",
@@ -685,8 +691,8 @@ function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemPro
         </div>
         <div className="space-y-1">
           <div className="flex items-center gap-2">
-            <h4 className="text-lg font-bold text-white">{booking.workspace_name || t("bookings.workspaceFallback")}</h4>
-            {booking.user_email && <span className="text-xs text-slate-500 bg-white/5 px-2 py-0.5 rounded-lg font-bold">{booking.user_email}</span>}
+            <h4 className="text-lg font-black text-slate-950 dark:text-white">{booking.workspace_name || t("bookings.workspaceFallback")}</h4>
+            {booking.user_email && <span className="rounded-lg bg-white px-2 py-0.5 text-xs font-bold text-slate-500 dark:bg-white/5">{booking.user_email}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs font-bold text-slate-500">
             <span className="flex items-center gap-1.5"><MapPin size={14} className="text-primary-500" /> {booking.floor_name || t("bookings.levelFallback")}</span>

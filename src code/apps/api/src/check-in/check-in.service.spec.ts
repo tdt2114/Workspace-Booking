@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
+﻿/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
 /* eslint-disable @typescript-eslint/no-unsafe-return */
 import { BadRequestException } from '@nestjs/common';
@@ -105,9 +105,9 @@ describe('CheckInService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User',
     };
 
     const result = await service.scan(user, {
@@ -163,9 +163,9 @@ describe('CheckInService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User',
     };
 
     await expect(
@@ -216,9 +216,9 @@ describe('CheckInService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User',
     };
 
     await expect(
@@ -285,9 +285,9 @@ describe('CheckInService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User',
     };
 
     const result = await service.scan(user, {
@@ -355,9 +355,9 @@ describe('CheckInService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User',
     };
 
     const result = await service.scan(user, {
@@ -409,9 +409,9 @@ describe('CheckInService', () => {
 
     const user: AuthenticatedUser = {
       id: 'user-1',
-      email: 'employee@demo.com',
-      role: 'employee',
-      fullName: 'Employee',
+      email: 'user@demo.com',
+      role: 'user',
+      fullName: 'User',
     };
 
     const result = await service.scan(user, {

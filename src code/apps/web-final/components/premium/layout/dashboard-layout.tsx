@@ -3,8 +3,24 @@
 import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { motion, AnimatePresence } from "framer-motion"
-import { LayoutDashboard, Map, CalendarRange, QrCode, Settings, LogOut, ShieldCheck, Bell, Search, Menu, X } from "lucide-react"
+import { AnimatePresence, motion } from "framer-motion"
+import {
+  Bell,
+  CalendarClock,
+  CalendarRange,
+  CheckCircle2,
+  LayoutDashboard,
+  LogOut,
+  Map,
+  Menu,
+  PlusCircle,
+  QrCode,
+  ScanLine,
+  Search,
+  Settings,
+  ShieldCheck,
+  X,
+} from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/premium/ui/button"
 import { LanguageToggle } from "@/components/premium/ui/language-toggle"
@@ -18,55 +34,119 @@ interface DashboardLayoutProps {
 }
 
 interface MeResponse {
+  email?: string
+  fullName?: string | null
+  full_name?: string | null
   role?: string
+}
+
+interface ReminderBooking {
+  id: string
+  workspace_name: string
+  floor_name: string
+  start_time: string
+  end_time: string
+  status: "confirmed" | "checked_in" | "completed" | "cancelled" | "no_show"
+}
+
+interface BookingsResponse {
+  items?: ReminderBooking[]
+}
+
+function tFallback(t: (path: string) => string, path: string, fallback: string) {
+  const value = t(path)
+  return value === path ? fallback : value
 }
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const pathname = usePathname()
   const router = useRouter()
-  const { t } = useLanguage()
-  const [role, setRole] = React.useState<string | null>(null)
-  const [scrolled, setScrolled] = React.useState(false)
+  const { locale, t } = useLanguage()
+  const [profile, setProfile] = React.useState<MeResponse | null>(null)
+  const [bookings, setBookings] = React.useState<ReminderBooking[]>([])
+  const [currentTime, setCurrentTime] = React.useState(() => Date.now())
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
 
   React.useEffect(() => {
-    const handleScroll = () => setScrolled(window.scrollY > 20)
-    window.addEventListener("scroll", handleScroll)
-    
     const checkRole = async () => {
       const { data: { session } } = await supabase.auth.getSession()
-      if (session) {
-        try {
-          const apiBaseUrl = getBrowserApiBaseUrl()
-          const res = await fetch(`${apiBaseUrl}/me`, {
-            headers: { Authorization: `Bearer ${session.access_token}` }
-          })
-          if (res.ok) {
-            const data = await res.json() as MeResponse
-            setRole(data.role ?? null)
-          }
-        } catch (err) {
-          console.error("Auth check error:", err)
-        }
-      } else {
+      if (!session) {
         router.push("/login")
+        return
+      }
+
+      try {
+        const apiBaseUrl = getBrowserApiBaseUrl()
+        const res = await fetch(`${apiBaseUrl}/me`, {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        })
+        if (res.ok) {
+          const data = await res.json() as MeResponse
+          setProfile(data)
+        }
+
+        const bookingsRes = await fetch(`${apiBaseUrl}/bookings/my`, {
+          headers: { Authorization: `Bearer ${session.access_token}` }
+        })
+        if (bookingsRes.ok) {
+          const data = await bookingsRes.json() as BookingsResponse
+          setBookings(data.items ?? [])
+        }
+      } catch (err) {
+        console.error("Auth check error:", err)
       }
     }
-    checkRole()
-    return () => window.removeEventListener("scroll", handleScroll)
+
+    void checkRole()
   }, [router])
 
-  const isAdmin = role === 'admin' || role === 'manager'
+  React.useEffect(() => {
+    const intervalId = window.setInterval(() => setCurrentTime(Date.now()), 60_000)
+    return () => window.clearInterval(intervalId)
+  }, [])
+
+  const role = profile?.role ?? null
+  const isAdmin = role === "admin"
+  const isSpaceOwner = role === "space_owner"
+  const canManageOwnSpaces = isSpaceOwner
+  const displayName = profile?.fullName ?? profile?.full_name ?? profile?.email ?? "Workspace User"
+  const dateLocale = locale === "vi" ? "vi-VN" : undefined
+  const reminder = React.useMemo(() => {
+    const checkInWindowMs = 15 * 60 * 1000
+    const upcomingWindowMs = 30 * 60 * 1000
+
+    return bookings
+      .filter(booking => booking.status === "confirmed" || booking.status === "checked_in")
+      .map(booking => {
+        const start = new Date(booking.start_time).getTime()
+        const end = new Date(booking.end_time).getTime()
+        const startsInMs = start - currentTime
+        const inCheckInWindow = booking.status === "confirmed" && currentTime >= start - checkInWindowMs && currentTime <= end
+        const activeCheckedIn = booking.status === "checked_in" && currentTime <= end
+        const upcomingSoon = booking.status === "confirmed" && startsInMs > 0 && startsInMs <= upcomingWindowMs
+        const priority = activeCheckedIn ? 0 : inCheckInWindow ? 1 : upcomingSoon ? 2 : 99
+
+        return { booking, start, end, priority, activeCheckedIn, inCheckInWindow, upcomingSoon }
+      })
+      .filter(item => item.priority < 99)
+      .sort((a, b) => a.priority - b.priority || a.start - b.start)[0] ?? null
+  }, [bookings, currentTime])
 
   const navItems = [
-    { label: t("layout.nav.home"), href: "/dashboard", icon: LayoutDashboard },
-    { label: t("layout.nav.bookSpace"), href: "/floor-map", icon: Map },
-    { label: t("layout.nav.myBookings"), href: "/bookings", icon: CalendarRange },
-    ...(isAdmin ? [
-      { label: t("layout.nav.qrAssets"), href: "/workspace-qr", icon: QrCode },
-      { label: t("layout.nav.system"), href: "/admin/setup", icon: Settings },
-    ] : []),
-  ]
+    { label: t("layout.nav.home"), href: "/dashboard", icon: LayoutDashboard, show: true },
+    { label: t("layout.nav.bookSpace"), href: "/floor-map", icon: Map, show: true },
+    { label: t("layout.nav.myBookings"), href: "/bookings", icon: CalendarRange, show: true },
+    { label: tFallback(t, "layout.nav.checkIn", "Check-in"), href: "/check-in", icon: ScanLine, show: true },
+    { label: tFallback(t, "layout.nav.mySpaces", "My Spaces"), href: "/admin/setup", icon: PlusCircle, show: canManageOwnSpaces },
+    { label: t("layout.nav.qrAssets"), href: "/workspace-qr", icon: QrCode, show: isAdmin },
+    { label: t("layout.nav.system"), href: "/admin/setup", icon: Settings, show: isAdmin },
+  ].filter(item => item.show)
+
+  const roleLabel = isAdmin
+    ? t("layout.role.admin")
+    : isSpaceOwner
+      ? tFallback(t, "layout.role.spaceOwner", "SPACE OWNER")
+      : t("layout.role.member")
 
   async function handleSignOut() {
     await supabase.auth.signOut()
@@ -74,153 +154,203 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   return (
-    <div className="min-h-screen bg-[#07090D] text-white selection:bg-primary-500/30">
-      {/* --- TOP NAVIGATION BAR --- */}
-      <nav 
-        className={cn(
-          "fixed top-0 left-0 right-0 z-50 transition-all duration-500 px-6 py-4 flex items-center justify-between",
-          scrolled ? "bg-[#07090D]/80 backdrop-blur-xl border-b border-white/5 py-3" : "bg-transparent"
-        )}
-      >
-        <div className="flex items-center gap-12">
-          {/* Logo */}
-          <Link href="/dashboard" className="flex items-center gap-2 group">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary-500 to-blue-600 flex items-center justify-center shadow-lg shadow-primary-500/20 group-hover:rotate-6 transition-transform">
-              <ShieldCheck className="text-white" size={24} />
+    <div className="min-h-screen bg-slate-50 text-slate-950 selection:bg-blue-500/20 dark:bg-[#070b16] dark:text-white">
+      <nav className="fixed inset-x-0 top-0 z-50 border-b border-slate-200 bg-white text-slate-950 shadow-lg shadow-slate-900/5 dark:border-white/10 dark:bg-slate-950 dark:text-white">
+        <div className="mx-auto flex h-16 max-w-[1600px] items-center justify-between px-4 sm:px-6 lg:px-10">
+          <div className="flex min-w-0 items-center gap-8">
+            <Link href="/dashboard" className="flex shrink-0 items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-500/20 ring-1 ring-blue-500/20 dark:bg-white/10 dark:ring-white/20">
+                <ShieldCheck size={23} />
+              </div>
+              <span className="text-xl font-black tracking-tight">
+                Workspace<span className="text-blue-600 dark:text-blue-300">Connect</span>
+              </span>
+            </Link>
+
+            <div className="hidden items-center gap-1 lg:flex">
+              {navItems.map((item) => {
+                const active = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "relative flex items-center gap-2 rounded-lg px-3.5 py-2 text-sm font-semibold transition-all",
+                      active ? "bg-blue-600 text-white shadow-sm shadow-blue-500/20 dark:bg-white dark:text-slate-950" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
+                    )}
+                  >
+                    <item.icon size={17} />
+                    {item.label}
+                  </Link>
+                )
+              })}
             </div>
-            <span className="text-2xl font-black tracking-tighter text-white">OFFICE<span className="text-primary-500">HUB</span></span>
-          </Link>
-
-          {/* Desktop Nav Items */}
-          <div className="hidden lg:flex items-center gap-2">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={cn(
-                  "px-4 py-2 rounded-xl text-sm font-bold transition-all relative group",
-                  pathname === item.href 
-                    ? "text-white" 
-                    : "text-slate-400 hover:text-white"
-                )}
-              >
-                {item.label}
-                {pathname === item.href && (
-                  <motion.div 
-                    layoutId="nav-pill"
-                    className="absolute inset-0 bg-white/5 border border-white/10 rounded-xl -z-10"
-                    transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                  />
-                )}
-                <div className={cn(
-                  "absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-primary-500 rounded-full transition-all duration-300 opacity-0",
-                  pathname === item.href && "opacity-100 translate-y-1"
-                )} />
-              </Link>
-            ))}
-          </div>
-        </div>
-
-        {/* Right Actions */}
-        <div className="flex items-center gap-3">
-          <div className="hidden md:flex items-center gap-3 mr-4 border-r border-white/5 pr-6">
-             <LanguageToggle />
-             <ModeToggle />
-             <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white rounded-full">
-                <Search size={20} />
-             </Button>
-             <Button variant="ghost" size="icon" className="text-slate-400 hover:text-white rounded-full relative">
-                <Bell size={20} />
-                <span className="absolute top-2 right-2 w-2 h-2 bg-primary-500 rounded-full border-2 border-[#07090D]" />
-             </Button>
           </div>
 
-          <div className="flex items-center gap-4">
-            <div className="hidden sm:flex flex-col items-end text-right">
-              <p className="text-xs font-black text-white leading-none">{isAdmin ? t("layout.role.admin") : t("layout.role.executive")}</p>
-              <p className="text-[10px] text-slate-500 font-bold tracking-widest mt-1">{t("layout.role.member")}</p>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="hidden items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 md:flex dark:border-white/10 dark:bg-white/5">
+              <LanguageToggle />
+              <ModeToggle />
+              <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-700 hover:bg-white hover:text-slate-950 dark:text-white dark:hover:bg-white/10 dark:hover:text-white">
+                <Search size={18} />
+              </Button>
+              <Button variant="ghost" size="icon" className="relative h-9 w-9 text-slate-700 hover:bg-white hover:text-slate-950 dark:text-white dark:hover:bg-white/10 dark:hover:text-white">
+                <Bell size={18} />
+                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-950" />
+              </Button>
             </div>
-            <button 
+
+            <div className="hidden min-w-0 items-center gap-3 border-l border-slate-200 pl-4 dark:border-white/15 sm:flex">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white dark:bg-white dark:text-slate-950">
+                {displayName.slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0 text-right">
+                <p className="truncate text-sm font-bold leading-none">{displayName}</p>
+                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-blue-100/80">
+                  {roleLabel}
+                </p>
+              </div>
+            </div>
+
+            <button
               onClick={handleSignOut}
-              className="w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 hover:text-rose-500 hover:bg-rose-500/10 transition-all active:scale-95"
+              className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition hover:bg-red-50 hover:text-red-600 dark:bg-white/10 dark:text-white dark:hover:bg-red-500/20 sm:flex"
+              aria-label="Sign out"
             >
               <LogOut size={18} />
             </button>
-            
-            {/* Mobile Menu Toggle */}
-            <button 
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden w-10 h-10 flex items-center justify-center text-white"
+
+            <button
+              onClick={() => setMobileMenuOpen(value => !value)}
+              className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-950 dark:bg-white/10 dark:text-white lg:hidden"
+              aria-label="Toggle navigation"
             >
-              {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              {mobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
             </button>
           </div>
         </div>
       </nav>
 
-      {/* --- MOBILE MENU --- */}
       <AnimatePresence>
         {mobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            className="fixed top-20 left-0 right-0 z-40 bg-[#07090D] border-b border-white/10 lg:hidden overflow-hidden"
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="fixed inset-x-0 top-16 z-40 border-b border-slate-200 bg-white p-4 shadow-xl lg:hidden dark:border-white/10 dark:bg-slate-900"
           >
-            <div className="p-6 space-y-4">
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-                <span className="text-sm font-bold text-slate-400">{t("common.language")}</span>
-                <LanguageToggle />
+            <div className="mb-4 flex items-center justify-between rounded-2xl bg-slate-50 p-3 dark:bg-white/5">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black text-slate-950 dark:text-white">{displayName}</p>
+                <p className="text-xs font-semibold text-slate-500">{roleLabel}</p>
               </div>
-              <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/5 p-4">
-                <span className="text-sm font-bold text-slate-400">{t("common.theme")}</span>
+              <div className="flex items-center gap-2">
+                <LanguageToggle />
                 <ModeToggle />
               </div>
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  className={cn(
-                    "flex items-center gap-4 p-4 rounded-2xl transition-all",
-                    pathname === item.href 
-                      ? "bg-primary-500/10 text-primary-500 border border-primary-500/20" 
-                      : "text-slate-400 hover:text-white"
-                  )}
-                >
-                  <item.icon size={20} />
-                  <span className="font-bold">{item.label}</span>
-                </Link>
-              ))}
+            </div>
+            <div className="grid gap-2">
+              {navItems.map((item) => {
+                const active = pathname === item.href
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={cn(
+                      "flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold",
+                      active ? "bg-blue-600 text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/5"
+                    )}
+                  >
+                    <item.icon size={19} />
+                    {item.label}
+                  </Link>
+                )
+              })}
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
+              >
+                <LogOut size={19} />
+                Sign out
+              </button>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* --- MAIN CONTENT --- */}
-      <main className="relative mx-auto max-w-[1600px] px-6 pb-32 pt-32 lg:px-12 lg:pb-12">
-        {/* Background Ambient Orbs */}
-        <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[80%] h-[40%] bg-primary-900/10 rounded-full blur-[160px] pointer-events-none -z-10" />
-        <div className="fixed bottom-0 right-0 w-[30%] h-[30%] bg-blue-900/5 rounded-full blur-[140px] pointer-events-none -z-10" />
-        
+      <main className="mx-auto max-w-[1600px] px-4 pb-28 pt-24 sm:px-6 lg:px-10 lg:pb-10">
+        {reminder && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-6 overflow-hidden rounded-[1.75rem] border border-blue-200 bg-white shadow-lg shadow-blue-100/70 dark:border-blue-500/20 dark:bg-slate-900 dark:shadow-blue-950/20"
+            data-testid="check-in-reminder-banner"
+          >
+            <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+              <div className="flex min-w-0 gap-4">
+                <div className={cn(
+                  "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl",
+                  reminder.activeCheckedIn ? "bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400" : "bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400"
+                )}>
+                  {reminder.activeCheckedIn ? <CheckCircle2 size={24} /> : <CalendarClock size={24} />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
+                    {reminder.activeCheckedIn
+                      ? tFallback(t, "layout.reminder.activeLabel", "Session active")
+                      : reminder.inCheckInWindow
+                        ? tFallback(t, "layout.reminder.readyLabel", "Ready to check in")
+                        : tFallback(t, "layout.reminder.upcomingLabel", "Starting soon")}
+                  </p>
+                  <h2 className="mt-1 truncate text-lg font-black text-slate-950 dark:text-white">
+                    {reminder.booking.workspace_name || tFallback(t, "bookings.workspaceFallback", "Workspace")}
+                  </h2>
+                  <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
+                    {reminder.booking.floor_name || tFallback(t, "bookings.levelFallback", "Level")}
+                    {" · "}
+                    {new Date(reminder.booking.start_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+                    {" - "}
+                    {new Date(reminder.booking.end_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-2 sm:flex sm:items-center">
+                <Button asChild className="h-11 rounded-2xl px-5 font-black">
+                  <Link href={reminder.activeCheckedIn ? "/bookings" : "/check-in"}>
+                    {reminder.activeCheckedIn
+                      ? tFallback(t, "layout.reminder.viewBooking", "View booking")
+                      : tFallback(t, "layout.reminder.checkInNow", "Check in now")}
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="h-11 rounded-2xl border-slate-200 px-5 font-black text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200">
+                  <Link href="/bookings">{t("layout.nav.myBookings")}</Link>
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
         {children}
       </main>
 
-      {/* --- MOBILE BOTTOM BAR (Optional but very App-like) --- */}
-      <div className="lg:hidden fixed bottom-6 left-6 right-6 h-16 glass-panel border-white/10 rounded-2xl flex items-center justify-around px-4 z-50">
-        {navItems.slice(0, 3).map((item) => (
-          <Link 
-            key={item.href} 
-            href={item.href}
-            className={cn(
-              "flex flex-col items-center gap-1 transition-all",
-              pathname === item.href ? "text-primary-500 scale-110" : "text-slate-500"
-            )}
-          >
-            <item.icon size={20} />
-            <span className="text-[10px] font-bold uppercase">{item.label.split(' ')[0]}</span>
-          </Link>
-        ))}
+      <div className="fixed inset-x-4 bottom-4 z-50 grid grid-cols-4 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/15 lg:hidden dark:border-white/10 dark:bg-slate-900">
+        {navItems.slice(0, 4).map((item) => {
+          const active = pathname === item.href
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={cn(
+                "flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-black uppercase tracking-tight",
+                active ? "bg-blue-600 text-white" : "text-slate-500 dark:text-slate-400"
+              )}
+            >
+              <item.icon size={19} />
+              <span className="max-w-full truncate">{item.label.split(" ")[0]}</span>
+            </Link>
+          )
+        })}
       </div>
     </div>
   )

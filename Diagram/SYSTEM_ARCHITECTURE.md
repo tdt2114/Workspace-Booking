@@ -41,7 +41,7 @@ Mục đích:
 
 ```mermaid
 flowchart LR
-    U[User<br/>admin / manager / employee]
+    U[User<br/>admin / space_owner / user]
 
     subgraph FE[Next.js Frontend]
         LOGIN[/login]

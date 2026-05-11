@@ -59,44 +59,44 @@ async function openFloorMapWithWindow(
 
 test.describe("booking policy and role access", () => {
   test.skip(
-    requireRoleCredentials(["employee", "manager", "admin"]),
+    requireRoleCredentials(["user", "space_owner", "admin"]),
     "Set E2E_PASSWORD and optional role-specific emails/passwords before running frontend E2E tests.",
   );
 
-  test("employee sees personal bookings but cannot access manager lifecycle tools", async ({
+  test("user sees personal bookings but cannot access admin lifecycle tools", async ({
     page,
   }) => {
-    await loginAsRole(page, "employee");
+    await loginAsRole(page, "user");
 
     await page.goto("/bookings");
     await expect(page.getByTestId("bookings-page")).toBeVisible();
     await expect(page.getByTestId("bookings-current-user-email")).toContainText(
-      "employee@demo.com",
+      "user@demo.com",
     );
     await expect(page.getByTestId("bookings-current-user-role")).toContainText(
-      "Role: employee",
+      "Role: user",
     );
     await expect(page.getByTestId("bookings-my-list")).toBeVisible();
     await expect(page.getByTestId("bookings-lifecycle-disabled")).toContainText(
-      "This panel is only enabled for manager and admin roles.",
+      "This panel is only enabled for space owner and admin roles.",
     );
     await expect(
       page.getByTestId("bookings-system-section"),
     ).toHaveCount(0);
   });
 
-  test("manager can access lifecycle tools and system booking management", async ({
+  test("space owner can access owned-space booking management", async ({
     page,
   }) => {
-    await loginAsRole(page, "manager");
+    await loginAsRole(page, "space_owner");
 
     await page.goto("/bookings");
     await expect(page.getByTestId("bookings-page")).toBeVisible();
     await expect(page.getByTestId("bookings-current-user-email")).toContainText(
-      "manager@demo.com",
+      "space-owner@demo.com",
     );
     await expect(page.getByTestId("bookings-current-user-role")).toContainText(
-      "Role: manager",
+      "Role: space_owner",
     );
     await expect(page.getByTestId("bookings-run-no-show")).toBeVisible();
     await expect(page.getByTestId("bookings-run-completed")).toBeVisible();
@@ -128,7 +128,7 @@ test.describe("booking policy and role access", () => {
     startDate.setSeconds(0, 0);
     const endDate = new Date(startDate.getTime() + 60 * 60 * 1000);
 
-    await loginAsRole(page, "employee");
+    await loginAsRole(page, "user");
     await openFloorMapWithWindow(page, startDate, endDate);
 
     await page.getByTestId("floor-map-create-booking").click();
@@ -146,7 +146,7 @@ test.describe("booking policy and role access", () => {
     startDate.setMinutes(startDate.getMinutes() + 20);
     const endDate = new Date(startDate.getTime() + 9 * 60 * 60 * 1000);
 
-    await loginAsRole(page, "employee");
+    await loginAsRole(page, "user");
     await openFloorMapWithWindow(page, startDate, endDate);
 
     await page.getByTestId("floor-map-create-booking").click();

@@ -243,7 +243,7 @@ export default function DashboardPage() {
             className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"
             href="/workspace-qr"
           >
-            Open QR manager
+            Open QR assets
           </a>
           <a
             className="rounded-full border border-slate-300 px-5 py-3 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:bg-slate-50"

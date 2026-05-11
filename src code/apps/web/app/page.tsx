@@ -111,7 +111,7 @@ export default function Home() {
               QR Admin
             </p>
             <h2 className="mt-2 text-xl font-semibold text-slate-900">
-              Open Workspace QR Manager
+              Open Workspace QR Assets
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Preview and download the static QR image for each workspace before
@@ -133,7 +133,7 @@ export default function Home() {
             </h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">
               Manage buildings, floors, workspaces, and SVG uploads from a single
-              prototype screen for admin and manager accounts.
+              prototype screen for admin and space owner accounts.
             </p>
           </a>
         </div>

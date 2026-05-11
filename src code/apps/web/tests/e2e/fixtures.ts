@@ -1,6 +1,6 @@
 import { expect, Page } from "@playwright/test";
 
-export type E2ERole = "employee" | "manager" | "admin";
+export type E2ERole = "user" | "space_owner" | "admin";
 
 type E2ECredentials = {
   email: string;
@@ -16,38 +16,38 @@ function resolveRoleCredentials(role: E2ERole): E2ECredentials {
         email: process.env.E2E_ADMIN_EMAIL ?? "admin@demo.com",
         password: process.env.E2E_ADMIN_PASSWORD ?? sharedPassword,
       };
-    case "manager":
+    case "space_owner":
       return {
-        email: process.env.E2E_MANAGER_EMAIL ?? "manager@demo.com",
-        password: process.env.E2E_MANAGER_PASSWORD ?? sharedPassword,
+        email: process.env.E2E_SPACE_OWNER_EMAIL ?? "space-owner@demo.com",
+        password: process.env.E2E_SPACE_OWNER_PASSWORD ?? sharedPassword,
       };
-    case "employee":
+    case "user":
     default:
       return {
         email:
-          process.env.E2E_EMPLOYEE_EMAIL ??
+          process.env.E2E_USER_EMAIL ??
           process.env.E2E_EMAIL ??
-          "employee@demo.com",
-        password: process.env.E2E_EMPLOYEE_PASSWORD ?? sharedPassword,
+          "user@demo.com",
+        password: process.env.E2E_USER_PASSWORD ?? sharedPassword,
       };
   }
 }
 
-export const e2eEmail = resolveRoleCredentials("employee").email;
-export const e2ePassword = resolveRoleCredentials("employee").password;
+export const e2eEmail = resolveRoleCredentials("user").email;
+export const e2ePassword = resolveRoleCredentials("user").password;
 
 export function requireE2ECredentials() {
   return !e2eEmail || !e2ePassword;
 }
 
 function resolveBookingFlowCredentials(): E2ECredentials {
-  const employeeCredentials = resolveRoleCredentials("employee");
+  const userCredentials = resolveRoleCredentials("user");
 
   return {
-    email: process.env.E2E_BOOKING_EMAIL ?? employeeCredentials.email,
+    email: process.env.E2E_BOOKING_EMAIL ?? userCredentials.email,
     password:
       process.env.E2E_BOOKING_PASSWORD ??
-      employeeCredentials.password ??
+      userCredentials.password ??
       process.env.E2E_PASSWORD ??
       "",
   };
@@ -92,7 +92,7 @@ export async function loginAsRole(page: Page, role: E2ERole) {
 }
 
 export async function loginAsE2EUser(page: Page) {
-  await loginAsRole(page, "employee");
+  await loginAsRole(page, "user");
 }
 
 export async function loginAsBookingFlowUser(page: Page) {

@@ -30,6 +30,8 @@ type WorkspaceStatusRecord = {
   id: string;
   name: string;
   status: string;
+  approval_status?: string;
+  owner_id?: string | null;
 };
 
 type WorkspaceIdRecord = {
@@ -118,14 +120,47 @@ export class BookingsService {
     };
   }
 
-  async findManageable() {
+  async findManageable(user: AuthenticatedUser) {
     const supabaseAdmin = getSupabaseAdmin();
-    const { data, error } = await supabaseAdmin
+
+    let ownedWorkspaceIds: string[] | null = null;
+
+    if (user.role === 'space_owner') {
+      const { data: ownedWorkspaces, error: ownedError } = await supabaseAdmin
+        .from('workspaces')
+        .select('id')
+        .eq('owner_id', user.id)
+        .returns<WorkspaceIdRecord[]>();
+
+      if (ownedError) {
+        throw new InternalServerErrorException({
+          message: 'Failed to fetch owner workspaces from Supabase',
+          details: ownedError.message,
+        });
+      }
+
+      ownedWorkspaceIds = ownedWorkspaces.map((workspace) => workspace.id);
+
+      if (ownedWorkspaceIds.length === 0) {
+        return {
+          count: 0,
+          items: [] as ManagedBookingRecord[],
+        };
+      }
+    }
+
+    let query = supabaseAdmin
       .from('bookings')
       .select(
         'id, user_id, workspace_id, start_time, end_time, status, checked_in_at, cancelled_at, cancel_reason, created_at',
       )
       .order('start_time', { ascending: false });
+
+    if (ownedWorkspaceIds) {
+      query = query.in('workspace_id', ownedWorkspaceIds);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new InternalServerErrorException({
@@ -263,7 +298,9 @@ export class BookingsService {
     );
     const upcomingCount = bookings.filter((booking) => {
       const start = new Date(booking.start_time).getTime();
-      return booking.status === 'confirmed' && Number.isFinite(start) && start > now;
+      return (
+        booking.status === 'confirmed' && Number.isFinite(start) && start > now
+      );
     }).length;
     const activeConfirmedCount = bookings.filter((booking) => {
       const start = new Date(booking.start_time).getTime();
@@ -352,7 +389,9 @@ export class BookingsService {
           ? Math.round((currentWorkspaceIds.size / workspaces.length) * 100)
           : 0,
         noShowRate: bookings.length
-          ? Math.round(((bookingStatusCounts.no_show ?? 0) / bookings.length) * 100)
+          ? Math.round(
+              ((bookingStatusCounts.no_show ?? 0) / bookings.length) * 100,
+            )
           : 0,
       },
       statusCounts: {
@@ -389,7 +428,9 @@ export class BookingsService {
       const count = bookings.filter((booking) => {
         const start = new Date(booking.start_time).getTime();
         return (
-          Number.isFinite(start) && start >= periodStartMs && start < periodEndMs
+          Number.isFinite(start) &&
+          start >= periodStartMs &&
+          start < periodEndMs
         );
       }).length;
 
@@ -419,7 +460,9 @@ export class BookingsService {
       const count = bookings.filter((booking) => {
         const start = new Date(booking.start_time).getTime();
         return (
-          Number.isFinite(start) && start >= periodStartMs && start < periodEndMs
+          Number.isFinite(start) &&
+          start >= periodStartMs &&
+          start < periodEndMs
         );
       }).length;
 
@@ -494,6 +537,10 @@ export class BookingsService {
 
     if (workspace.status !== 'available') {
       throw new BadRequestException('Only available workspaces can be booked');
+    }
+
+    if (workspace.approval_status && workspace.approval_status !== 'approved') {
+      throw new BadRequestException('Only approved workspaces can be booked');
     }
 
     await this.tryReleaseExpiredBookings(now);
@@ -587,7 +634,7 @@ export class BookingsService {
     }
 
     const bookings = data as BookingRecord[];
-    const canSeeOccupantDetails = ['admin', 'manager'].includes(user.role);
+    const canSeeOccupantDetails = ['admin', 'space_owner'].includes(user.role);
 
     if (!canSeeOccupantDetails || bookings.length === 0) {
       return {
@@ -640,7 +687,7 @@ export class BookingsService {
 
   async cancel(id: string, user: AuthenticatedUser, dto: CancelBookingDto) {
     const booking = await this.findBookingById(id);
-    const canManageAnyBooking = ['admin', 'manager'].includes(user.role);
+    const canManageAnyBooking = user.role === 'admin';
 
     if (!canManageAnyBooking && booking.user_id !== user.id) {
       throw new ForbiddenException('You can only cancel your own bookings');
@@ -676,16 +723,14 @@ export class BookingsService {
 
   async release(id: string, user: AuthenticatedUser) {
     const booking = await this.findBookingById(id);
-    const canManageAnyBooking = ['admin', 'manager'].includes(user.role);
+    const canManageAnyBooking = user.role === 'admin';
 
     if (!canManageAnyBooking && booking.user_id !== user.id) {
       throw new ForbiddenException('You can only release your own bookings');
     }
 
     if (booking.status !== 'checked_in') {
-      throw new BadRequestException(
-        'Only checked-in bookings can be released',
-      );
+      throw new BadRequestException('Only checked-in bookings can be released');
     }
 
     const supabaseAdmin = getSupabaseAdmin();
@@ -840,7 +885,7 @@ export class BookingsService {
     const supabaseAdmin = getSupabaseAdmin();
     const { data, error } = await supabaseAdmin
       .from('workspaces')
-      .select('id, name, status')
+      .select('id, name, status, approval_status, owner_id')
       .eq('id', id)
       .single<WorkspaceStatusRecord>();
 

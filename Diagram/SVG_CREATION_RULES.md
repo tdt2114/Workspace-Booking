@@ -201,7 +201,7 @@ Nếu click không được, kiểm tra theo thứ tự:
 
 ---
 
-## 7. Rule cho manager/admin khi upload SVG
+## 7. Rule cho space owner/admin khi upload SVG
 
 Upload SVG chỉ làm 1 việc:
 

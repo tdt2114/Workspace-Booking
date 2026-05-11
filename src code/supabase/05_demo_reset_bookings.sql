@@ -1,4 +1,4 @@
--- Demo/dev helper only. Do not run this against production data.
+﻿-- Demo/dev helper only. Do not run this against production data.
 --
 -- Purpose:
 -- - Clear active booking quota for the three demo accounts.
@@ -7,7 +7,7 @@
 --
 -- Safe scope:
 -- - This script only deletes bookings owned by these demo emails:
---   admin@demo.com, manager@demo.com, employee@demo.com.
+--   admin@demo.com, space-owner@demo.com, user@demo.com.
 -- - It does not delete users, buildings, floors, workspaces, or storage files.
 
 begin;
@@ -15,7 +15,7 @@ begin;
 with demo_users as (
   select id
   from public.users
-  where email in ('admin@demo.com', 'manager@demo.com', 'employee@demo.com')
+  where email in ('admin@demo.com', 'space-owner@demo.com', 'user@demo.com')
 )
 delete from public.bookings b
 using demo_users du
@@ -31,10 +31,10 @@ where qr_code_value in (
   'room_m_01'
 );
 
-with employee_user as (
+with app_user as (
   select id
   from public.users
-  where email = 'employee@demo.com'
+  where email = 'user@demo.com'
   limit 1
 ),
 completed_workspace as (
@@ -59,24 +59,24 @@ insert into public.bookings (
   created_at
 )
 select
-  employee_user.id,
+  app_user.id,
   completed_workspace.id,
   date_trunc('day', now()) - interval '2 days' + interval '9 hours',
   date_trunc('day', now()) - interval '2 days' + interval '10 hours',
   'completed',
   date_trunc('day', now()) - interval '2 days' + interval '9 hours 5 minutes',
   now()
-from employee_user, completed_workspace
+from app_user, completed_workspace
 union all
 select
-  employee_user.id,
+  app_user.id,
   no_show_workspace.id,
   date_trunc('day', now()) - interval '1 day' + interval '9 hours',
   date_trunc('day', now()) - interval '1 day' + interval '10 hours',
   'no_show',
   null,
   now()
-from employee_user, no_show_workspace;
+from app_user, no_show_workspace;
 
 commit;
 
@@ -90,5 +90,5 @@ select
 from public.bookings b
 join public.users u on u.id = b.user_id
 join public.workspaces w on w.id = b.workspace_id
-where u.email in ('admin@demo.com', 'manager@demo.com', 'employee@demo.com')
+where u.email in ('admin@demo.com', 'space-owner@demo.com', 'user@demo.com')
 order by b.start_time desc;
