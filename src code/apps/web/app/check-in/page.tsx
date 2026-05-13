@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
+import type { Html5Qrcode as Html5QrcodeClass } from "html5-qrcode";
 import { supabase } from "@/lib/supabase/client";
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url";
 import { buildLoginRedirectUrl } from "@/lib/auth-redirect";
@@ -43,16 +44,7 @@ type BookingsResponse = {
   items: BookingRecord[];
 };
 
-type Html5QrcodeInstance = {
-  start: (
-    cameraConfig: unknown,
-    configuration: unknown,
-    onSuccess: (decodedText: string) => void,
-    onError?: (errorMessage: string) => void,
-  ) => Promise<void>;
-  stop: () => Promise<void>;
-  clear: () => Promise<void>;
-};
+type Html5QrcodeInstance = InstanceType<typeof Html5QrcodeClass>;
 
 function buildDefaultScanTime() {
   const now = new Date();
@@ -412,6 +404,7 @@ export default function CheckInPage() {
             handleDetectedQr(decodedText);
             void stopCamera();
           },
+          () => {},
         );
       } catch {
         await scanner.start(
@@ -425,6 +418,7 @@ export default function CheckInPage() {
             handleDetectedQr(decodedText);
             void stopCamera();
           },
+          () => {},
         );
       }
 

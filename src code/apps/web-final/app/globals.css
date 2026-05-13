@@ -17,7 +17,7 @@
   
   --color-border: #2A3241;
   
-  --font-sans: var(--font-outfit), var(--font-inter), sans-serif;
+  --font-sans: "Outfit", "Inter", "Segoe UI", "Aptos", "Helvetica Neue", sans-serif;
 
   /* Workspace Status Colors */
   --color-status-available: #10B981; /* Emerald 500 */

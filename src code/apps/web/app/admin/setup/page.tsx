@@ -497,14 +497,17 @@ export default function AdminSetupPage() {
       };
     }
 
+    const accessToken = session.access_token;
+    const floorId = selectedSvgFloor.id;
+
     async function loadSvgAnalysis() {
       setSvgAnalysisLoading(true);
       setSvgAnalysisError(null);
 
       try {
-        const response = await fetch(`${apiBaseUrl}/floors/${selectedSvgFloor.id}/svg`, {
+        const response = await fetch(`${apiBaseUrl}/floors/${floorId}/svg`, {
           headers: {
-            Authorization: `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${accessToken}`,
           },
           signal: controller.signal,
         });

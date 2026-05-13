@@ -485,6 +485,7 @@ export default function FloorMapPage() {
       return;
     }
 
+    const accessToken = session.access_token;
     let active = true;
 
     async function syncVisibleTab() {
@@ -493,7 +494,7 @@ export default function FloorMapPage() {
       }
 
       try {
-        await refreshBookingState(session.access_token, {
+        await refreshBookingState(accessToken, {
           floorId: selectedFloorId,
           startTime: viewStart,
           endTime: viewEnd,

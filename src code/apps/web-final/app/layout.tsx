@@ -1,21 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Outfit, Inter } from "next/font/google";
 import { LanguageProvider } from "@/components/premium/language-provider";
 import { ThemeProvider } from "@/components/premium/theme-provider";
 import { ToastProvider } from "@/components/premium/ui/toast";
 import "./globals.css";
-
-const outfit = Outfit({
-  subsets: ["latin"],
-  variable: "--font-outfit",
-  display: "swap",
-});
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: {
@@ -58,7 +45,7 @@ export default function FinalLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={`${outfit.variable} ${inter.variable}`}>
+    <html lang="en" suppressHydrationWarning>
       <body className="antialiased min-h-screen flex flex-col">
         <ThemeProvider>
           <LanguageProvider>

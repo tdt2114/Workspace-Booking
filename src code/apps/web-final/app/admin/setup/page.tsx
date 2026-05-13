@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy, Wand2 } from "lucide-react"
+import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy, UserCog, Settings, ShieldCheck, Search, Users, Clock, Ban, QrCode, CalendarClock, Wrench } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils"
 
 // --- Types ---
 type Tab = "buildings" | "floors" | "workspaces" | "svg-mapping"
+type ConsoleModule = "space-setup" | "approvals" | "users" | "tools"
 
 interface Building {
   id: string
@@ -39,10 +40,13 @@ interface Floor {
 interface Workspace {
   id: string
   floor_id: string
+  owner_id?: string | null
   name: string
   type: string
   status: string
   approval_status?: string
+  rejection_reason?: string | null
+  approved_at?: string | null
   svg_element_id: string
   capacity: number
 }
@@ -56,6 +60,15 @@ interface OwnerRequest {
   user_id: string
   status: "none" | "pending" | "approved" | "rejected"
   message: string | null
+  created_at: string
+  reviewed_at?: string | null
+}
+
+interface UserRecord {
+  id: string
+  email: string
+  full_name: string | null
+  role: "user" | "space_owner" | "admin"
   created_at: string
 }
 
@@ -104,6 +117,7 @@ interface SetupGuideProps {
   workspaces: Workspace[]
   activeTab: Tab
   onSelectTab: (tab: Tab) => void
+  compact?: boolean
 }
 
 // --- Main Component ---
@@ -114,12 +128,14 @@ export default function AdminSetupPage() {
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   const [session, setSession] = React.useState<Session | null>(null)
   const [userRole, setUserRole] = React.useState<string | null>(null)
+  const [activeModule, setActiveModule] = React.useState<ConsoleModule>("space-setup")
   const [activeTab, setActiveTab] = React.useState<Tab>("buildings")
   
   const [buildings, setBuildings] = React.useState<Building[]>([])
   const [floors, setFloors] = React.useState<Floor[]>([])
   const [workspaces, setWorkspaces] = React.useState<Workspace[]>([])
   const [ownerRequests, setOwnerRequests] = React.useState<OwnerRequest[]>([])
+  const [users, setUsers] = React.useState<UserRecord[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const accessToken = session?.access_token ?? null
@@ -162,6 +178,16 @@ export default function AdminSetupPage() {
     }
   }, [apiBaseUrl])
 
+  const loadUsers = React.useCallback(async (token: string) => {
+    const res = await fetch(`${apiBaseUrl}/users`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (res.ok) {
+      const data = await res.json() as ListResponse<UserRecord>
+      setUsers(data.items ?? [])
+    }
+  }, [apiBaseUrl])
+
   // Auth & Initial Data
   React.useEffect(() => {
     const bootstrap = async () => {
@@ -182,17 +208,20 @@ export default function AdminSetupPage() {
           router.push("/dashboard")
           return
         }
-        if (role === "space_owner") {
-          setActiveTab("workspaces")
-        }
         if (role === "admin") {
-          void loadOwnerRequests(currentSession.access_token)
+          await Promise.all([
+            loadOwnerRequests(currentSession.access_token),
+            loadUsers(currentSession.access_token),
+          ])
+        } else if (role === "space_owner") {
+          router.push("/dashboard")
+          return
         }
       }
       await loadData(currentSession.access_token ?? "")
     }
     void bootstrap()
-  }, [apiBaseUrl, loadData, loadOwnerRequests, router])
+  }, [apiBaseUrl, loadData, loadOwnerRequests, loadUsers, router])
 
   const handleOwnerRequestReview = async (id: string, status: "approved" | "rejected") => {
     if (!accessToken || !isAdmin) return
@@ -203,7 +232,7 @@ export default function AdminSetupPage() {
         body: JSON.stringify({ status, reviewNote: status === "approved" ? "Approved by System Admin" : "Rejected by System Admin" }),
       })
       if (res.ok) {
-        await loadOwnerRequests(accessToken)
+        await Promise.all([loadOwnerRequests(accessToken), loadUsers(accessToken)])
         toast({ title: status === "approved" ? "Space Owner approved" : "Space Owner rejected", variant: "success" })
       } else {
         const message = await readApiError(res, "Could not review request.")
@@ -214,116 +243,690 @@ export default function AdminSetupPage() {
     }
   }
 
+  const handleWorkspaceReview = async (workspaceId: string, approvalStatus: "approved" | "rejected" | "hidden") => {
+    if (!accessToken || !isAdmin) return
+    try {
+      const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceId}/review`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({
+          approvalStatus,
+          rejectionReason: approvalStatus === "approved" ? undefined : `${approvalStatus} by System Admin`,
+        }),
+      })
+
+      if (res.ok) {
+        await loadData(accessToken)
+        toast({ title: `Workspace ${approvalStatus.replace("_", " ")}`, variant: "success" })
+      } else {
+        const message = await readApiError(res, "Could not review workspace.")
+        toast({ title: "Review failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: "Review failed", description: t("admin.networkError"), variant: "error" })
+    }
+  }
+
   if (loading && !session) return null
 
   const isAdmin = userRole === "admin"
-  const isSpaceOwner = userRole === "space_owner"
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 sm:space-y-8">
-        <section className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-[0_24px_80px_-44px_rgba(15,23,42,0.35)] dark:border-white/10 dark:bg-slate-950">
-          <div className="grid gap-6 bg-gradient-to-br from-blue-50 via-white to-cyan-50 p-6 dark:from-slate-950 dark:via-slate-950 dark:to-blue-950/40 sm:p-8 lg:grid-cols-[1fr_auto] lg:items-end">
-            <div className="max-w-3xl space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-[10px] font-black uppercase tracking-[0.22em] text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-300">
-                <Wand2 size={14} />
-                Setup wizard
-              </div>
-              <div>
-                <h1 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl dark:text-white">{t("admin.title")}</h1>
-                <p className="mt-2 max-w-2xl text-sm font-semibold leading-relaxed text-slate-600 sm:text-base dark:text-slate-300">{t("admin.subtitle")}</p>
-              </div>
-              <div className="grid grid-cols-3 gap-3 sm:max-w-xl">
-                <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Buildings</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{buildings.length}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Floors</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{floors.length}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white/80 p-3 dark:border-white/10 dark:bg-white/5">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">Spaces</p>
-                  <p className="mt-1 text-2xl font-black text-slate-950 dark:text-white">{workspaces.length}</p>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5 shadow-sm dark:border-white/10 dark:bg-slate-900">
-              {isAdmin && <TabButton active={activeTab === "buildings"} onClick={() => setActiveTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />}
-              {isAdmin && <TabButton active={activeTab === "floors"} onClick={() => setActiveTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />}
-              {isAdmin && <TabButton active={activeTab === "svg-mapping"} onClick={() => setActiveTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />}
-              <TabButton active={activeTab === "workspaces"} onClick={() => setActiveTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
-            </div>
-          </div>
-        </section>
-
+      <SystemConsolePage
+        buildings={buildings}
+        floors={floors}
+        workspaces={workspaces}
+        ownerRequests={ownerRequests}
+        users={users}
+        activeModule={activeModule}
+        activeTab={activeTab}
+        apiBaseUrl={apiBaseUrl}
+        token={tokenForUi}
+        userRole={userRole}
+        onSelectModule={setActiveModule}
+        onSelectTab={setActiveTab}
+        onRefresh={() => loadData(tokenForUi)}
+        onRefreshUsers={() => accessToken ? loadUsers(accessToken) : Promise.resolve()}
+        onReviewOwnerRequest={handleOwnerRequestReview}
+        onReviewWorkspace={handleWorkspaceReview}
+      >
         {error && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm font-bold text-rose-700 dark:border-rose-500/20 dark:bg-rose-500/10 dark:text-rose-300">
             <AlertCircle size={18} />
             {error}
           </motion.div>
         )}
-
-        {isAdmin && (
-          <SetupGuide
-            buildings={buildings}
-            floors={floors}
-            workspaces={workspaces}
-            activeTab={activeTab}
-            onSelectTab={setActiveTab}
-          />
-        )}
-
-        {isAdmin && ownerRequests.filter((request) => request.status === "pending").length > 0 && (
-          <Card className="border-amber-200 bg-amber-50 dark:border-amber-500/20 dark:bg-amber-500/10">
-            <CardHeader>
-              <CardTitle>Space Owner requests</CardTitle>
-              <CardDescription>Approve or reject users who want to publish their own spaces.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {ownerRequests.filter((request) => request.status === "pending").map((request) => (
-                <div key={request.id} className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-white p-4 dark:border-white/10 dark:bg-slate-900 sm:flex-row sm:items-center sm:justify-between">
-                  <div>
-                    <p className="font-black text-slate-950 dark:text-white">{request.user_id}</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-500">{request.message || "No message provided."}</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2 sm:flex">
-                    <Button className="h-10 rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => handleOwnerRequestReview(request.id, "approved")}>Approve</Button>
-                    <Button variant="outline" className="h-10 rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50 dark:border-rose-500/20 dark:text-rose-300 dark:hover:bg-rose-500/10" onClick={() => handleOwnerRequestReview(request.id, "rejected")}>Reject</Button>
-                  </div>
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        )}
-
-        {isSpaceOwner && (
-          <div className="rounded-[1.5rem] border border-blue-200 bg-blue-50 p-5 text-sm font-semibold text-blue-900 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-100">
-            Spaces you create are submitted as pending approval. A System Admin must approve them before users can book them.
-          </div>
-        )}
-
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.3, ease: "easeOut" }}
-          >
-            {activeTab === "buildings" && isAdmin ? (accessToken ? <BuildingPanel buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "floors" && isAdmin ? (accessToken ? <FloorPanel floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-            {activeTab === "workspaces" ? (accessToken ? <WorkspacePanel workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} userRole={userRole} /> : null) : null}
-            {activeTab === "svg-mapping" && isAdmin ? (accessToken ? <SvgMapper floors={floors} onRefresh={() => loadData(tokenForUi)} apiBaseUrl={apiBaseUrl} token={tokenForUi} /> : null) : null}
-          </motion.div>
-        </AnimatePresence>
-      </div>
+      </SystemConsolePage>
     </DashboardLayout>
   )
 }
 
-function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: SetupGuideProps) {
+interface SystemConsolePageProps {
+  buildings: Building[]
+  floors: Floor[]
+  workspaces: Workspace[]
+  ownerRequests: OwnerRequest[]
+  users: UserRecord[]
+  activeModule: ConsoleModule
+  activeTab: Tab
+  apiBaseUrl: string
+  token: string
+  userRole: string | null
+  children?: React.ReactNode
+  onSelectModule: (module: ConsoleModule) => void
+  onSelectTab: (tab: Tab) => void
+  onRefresh: () => Promise<void>
+  onRefreshUsers: () => Promise<void>
+  onReviewOwnerRequest: (id: string, status: "approved" | "rejected") => Promise<void>
+  onReviewWorkspace: (id: string, status: "approved" | "rejected" | "hidden") => Promise<void>
+}
+
+function SystemConsolePage({
+  buildings,
+  floors,
+  workspaces,
+  ownerRequests,
+  users,
+  activeModule,
+  activeTab,
+  apiBaseUrl,
+  token,
+  userRole,
+  children,
+  onSelectModule,
+  onSelectTab,
+  onRefresh,
+  onRefreshUsers,
+  onReviewOwnerRequest,
+  onReviewWorkspace,
+}: SystemConsolePageProps) {
+  const pendingSpaces = workspaces.filter((workspace) => workspace.approval_status === "pending_approval")
+  const pendingOwnerRequests = ownerRequests.filter((request) => request.status === "pending")
+
+  return (
+    <div className="space-y-6 sm:space-y-8">
+      {children}
+      <StatsCards
+        buildings={buildings.length}
+        floors={floors.length}
+        spaces={workspaces.length}
+        pendingSpaces={pendingSpaces.length}
+        ownerRequests={pendingOwnerRequests.length}
+      />
+
+      <ModuleNav
+        activeModule={activeModule}
+        pendingCount={pendingSpaces.length + pendingOwnerRequests.length}
+        onSelectModule={onSelectModule}
+      />
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeModule}
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.25, ease: "easeOut" }}
+        >
+          {activeModule === "space-setup" ? (
+            <SpaceSetupModule
+              activeTab={activeTab}
+              buildings={buildings}
+              floors={floors}
+              workspaces={workspaces}
+              apiBaseUrl={apiBaseUrl}
+              token={token}
+              userRole={userRole}
+              onSelectTab={onSelectTab}
+              onRefresh={onRefresh}
+            />
+          ) : null}
+          {activeModule === "approvals" ? (
+            <ApprovalsModule
+              ownerRequests={ownerRequests}
+              workspaces={workspaces}
+              buildings={buildings}
+              floors={floors}
+              users={users}
+              onReviewOwnerRequest={onReviewOwnerRequest}
+              onReviewWorkspace={onReviewWorkspace}
+            />
+          ) : null}
+          {activeModule === "users" ? (
+            <UserManagementModule apiBaseUrl={apiBaseUrl} token={token} users={users} onRefreshUsers={onRefreshUsers} />
+          ) : null}
+          {activeModule === "tools" ? <SystemToolsModule /> : null}
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  )
+}
+
+function StatsCards({
+  buildings,
+  floors,
+  spaces,
+  pendingSpaces,
+  ownerRequests,
+}: {
+  buildings: number
+  floors: number
+  spaces: number
+  pendingSpaces: number
+  ownerRequests: number
+}) {
+  const stats = [
+    { label: "Buildings", value: buildings, description: "Managed facilities", icon: Building2 },
+    { label: "Floors", value: floors, description: "Configured levels", icon: Layers },
+    { label: "Spaces", value: spaces, description: "Bookable desks & rooms", icon: MapPin },
+    { label: "Pending spaces", value: pendingSpaces, description: "Workspace approvals", icon: CheckCircle2, alert: pendingSpaces > 0 },
+    { label: "Owner requests", value: ownerRequests, description: "Waiting approval", icon: Plus, alert: ownerRequests > 0 },
+  ]
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      {stats.map((item) => {
+        const Icon = item.icon
+
+        return (
+          <ConsoleCard key={item.label} className="min-h-[150px] p-5">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-500">{item.label}</p>
+                <p className="mt-4 text-4xl font-black tracking-tight text-slate-950 dark:text-white">{item.value}</p>
+                <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">{item.description}</p>
+              </div>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                <Icon size={21} />
+              </div>
+            </div>
+            {item.alert ? <span className="mt-2 inline-block h-2 w-2 rounded-full bg-amber-500" /> : null}
+          </ConsoleCard>
+        )
+      })}
+    </div>
+  )
+}
+
+function ModuleNav({
+  activeModule,
+  pendingCount,
+  onSelectModule,
+}: {
+  activeModule: ConsoleModule
+  pendingCount: number
+  onSelectModule: (module: ConsoleModule) => void
+}) {
+  const modules: Array<{ key: ConsoleModule; label: string; icon: React.ElementType; badge?: number }> = [
+    { key: "space-setup", label: "Space Setup", icon: Building2 },
+    { key: "approvals", label: "Approvals", icon: ShieldCheck, badge: pendingCount },
+    { key: "users", label: "User Management", icon: UserCog },
+    { key: "tools", label: "System Tools", icon: Settings },
+  ]
+
+  return (
+    <ConsoleCard className="p-2">
+      <div className="grid gap-2 md:grid-cols-4">
+        {modules.map((item) => {
+          const Icon = item.icon
+          const active = activeModule === item.key
+
+          return (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => onSelectModule(item.key)}
+              className={cn(
+                "relative flex min-h-14 items-center justify-center gap-3 rounded-2xl px-4 text-sm font-black transition-all",
+                active ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-white/10",
+              )}
+            >
+              <Icon size={18} />
+              {item.label}
+              {item.badge ? (
+                <span className={cn(
+                  "ml-1 rounded-full px-2 py-0.5 text-xs font-black",
+                  active ? "bg-white/20 text-white" : "bg-rose-100 text-rose-600",
+                )}>
+                  {item.badge}
+                </span>
+              ) : null}
+            </button>
+          )
+        })}
+      </div>
+    </ConsoleCard>
+  )
+}
+
+function SpaceSetupModule({
+  activeTab,
+  buildings,
+  floors,
+  workspaces,
+  apiBaseUrl,
+  token,
+  userRole,
+  onSelectTab,
+  onRefresh,
+}: {
+  activeTab: Tab
+  buildings: Building[]
+  floors: Floor[]
+  workspaces: Workspace[]
+  apiBaseUrl: string
+  token: string
+  userRole: string | null
+  onSelectTab: (tab: Tab) => void
+  onRefresh: () => Promise<void>
+}) {
+  const { t } = useLanguage()
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white">Space Setup</h1>
+          <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">Manage buildings, floors, SVG maps and bookable workspaces.</p>
+        </div>
+        <Button className="h-12 rounded-2xl bg-blue-600 px-6 font-black hover:bg-blue-700" onClick={() => onSelectTab("buildings")}>
+          <Plus size={17} className="mr-2" />
+          Create Building
+        </Button>
+      </div>
+
+      <SetupGuide buildings={buildings} floors={floors} workspaces={workspaces} activeTab={activeTab} onSelectTab={onSelectTab} compact />
+
+      <ConsoleCard className="overflow-hidden">
+        <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-4 dark:border-white/10">
+          <TabButton active={activeTab === "buildings"} onClick={() => onSelectTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />
+          <TabButton active={activeTab === "floors"} onClick={() => onSelectTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />
+          <TabButton active={activeTab === "svg-mapping"} onClick={() => onSelectTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />
+          <TabButton active={activeTab === "workspaces"} onClick={() => onSelectTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
+        </div>
+        <div className="p-5 sm:p-6">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.22, ease: "easeOut" }}
+            >
+              {activeTab === "buildings" ? <BuildingPanel buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+              {activeTab === "floors" ? <FloorPanel floors={floors} buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+              {activeTab === "workspaces" ? <WorkspacePanel workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} userRole={userRole} /> : null}
+              {activeTab === "svg-mapping" ? <SvgMapper floors={floors} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+            </motion.div>
+          </AnimatePresence>
+        </div>
+      </ConsoleCard>
+    </div>
+  )
+}
+
+function ApprovalsModule({
+  ownerRequests,
+  workspaces,
+  buildings,
+  floors,
+  users,
+  onReviewOwnerRequest,
+  onReviewWorkspace,
+}: {
+  ownerRequests: OwnerRequest[]
+  workspaces: Workspace[]
+  buildings: Building[]
+  floors: Floor[]
+  users: UserRecord[]
+  onReviewOwnerRequest: (id: string, status: "approved" | "rejected") => Promise<void>
+  onReviewWorkspace: (id: string, status: "approved" | "rejected" | "hidden") => Promise<void>
+}) {
+  const pendingOwnerRequests = ownerRequests.filter((request) => request.status === "pending")
+  const pendingWorkspaces = workspaces.filter((workspace) => workspace.approval_status === "pending_approval")
+  const userById = new Map(users.map((user) => [user.id, user]))
+
+  const describeWorkspaceLocation = (workspace: Workspace) => {
+    const floor = floors.find((item) => item.id === workspace.floor_id)
+    const building = floor ? buildings.find((item) => item.id === floor.building_id) : null
+
+    return {
+      building: building?.name ?? "Unknown building",
+      floor: floor?.name ?? (floor ? `Floor ${floor.floor_number}` : "Unknown floor"),
+      owner: workspace.owner_id ? userById.get(workspace.owner_id) : null,
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <ModuleHeading title="Approvals" description="Review access upgrades and submitted workspaces before they become public." />
+
+      <div className="grid gap-6 xl:grid-cols-2">
+        <ConsoleCard className="p-5 sm:p-6">
+          <SectionHeader title="Space Owner Requests" description="Users waiting for permission to publish and manage their own spaces." count={pendingOwnerRequests.length} />
+          <div className="mt-5 space-y-3">
+            {pendingOwnerRequests.length ? pendingOwnerRequests.map((request) => {
+              const user = userById.get(request.user_id)
+
+              return (
+                <ApprovalRow key={request.id}>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-black text-slate-950 dark:text-white">{user?.full_name || "User request"}</p>
+                      <StatusBadge status={request.status} />
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{user?.email ?? request.user_id}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Organization: {request.message || "Not provided"} • Requested {formatConsoleDate(request.created_at)}</p>
+                  </div>
+                  <ApprovalActions
+                    onApprove={() => void onReviewOwnerRequest(request.id, "approved")}
+                    onReject={() => void onReviewOwnerRequest(request.id, "rejected")}
+                  />
+                </ApprovalRow>
+              )
+            }) : <EmptyConsoleState label="No pending owner requests." />}
+          </div>
+        </ConsoleCard>
+
+        <ConsoleCard className="p-5 sm:p-6">
+          <SectionHeader title="Workspace Approval Queue" description="Spaces submitted by Space Owners before public booking." count={pendingWorkspaces.length} />
+          <div className="mt-5 space-y-3">
+            {pendingWorkspaces.length ? pendingWorkspaces.map((workspace) => {
+              const location = describeWorkspaceLocation(workspace)
+
+              return (
+                <ApprovalRow key={workspace.id}>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-black text-slate-950 dark:text-white">{workspace.name}</p>
+                      <StatusBadge status={workspace.approval_status ?? "pending_approval"} />
+                    </div>
+                    <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{location.building} • {location.floor}</p>
+                    <p className="mt-1 text-xs font-semibold text-slate-500">Owner: {location.owner?.email ?? workspace.owner_id ?? "Unknown"} • Submitted {formatConsoleDate(workspace.approved_at ?? "")}</p>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 sm:flex">
+                    <Button size="sm" className="rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => void onReviewWorkspace(workspace.id, "approved")}>Approve</Button>
+                    <Button size="sm" variant="outline" className="rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50" onClick={() => void onReviewWorkspace(workspace.id, "rejected")}>Reject</Button>
+                    <Button size="sm" variant="outline" className="rounded-xl font-black" onClick={() => void onReviewWorkspace(workspace.id, "hidden")}>Hide</Button>
+                  </div>
+                </ApprovalRow>
+              )
+            }) : <EmptyConsoleState label="No workspace is waiting for approval." />}
+          </div>
+        </ConsoleCard>
+      </div>
+    </div>
+  )
+}
+
+function UserManagementModule({
+  apiBaseUrl,
+  token,
+  users,
+  onRefreshUsers,
+}: {
+  apiBaseUrl: string
+  token: string
+  users: UserRecord[]
+  onRefreshUsers: () => Promise<void>
+}) {
+  const { toast } = useToast()
+  const [search, setSearch] = React.useState("")
+  const [roleFilter, setRoleFilter] = React.useState<"all" | "user" | "space_owner" | "admin" | "blocked">("all")
+  const [form, setForm] = React.useState({ email: "", password: "", fullName: "" })
+  const [isSaving, setIsSaving] = React.useState(false)
+
+  const filteredUsers = users.filter((user) => {
+    const query = search.trim().toLowerCase()
+    const matchesSearch = !query || `${user.email} ${user.full_name ?? ""}`.toLowerCase().includes(query)
+    const matchesRole = roleFilter === "all" ? true : roleFilter === "blocked" ? false : user.role === roleFilter
+    return matchesSearch && matchesRole
+  })
+
+  const createAdmin = async () => {
+    if (!form.email.trim() || !form.password.trim()) {
+      toast({ title: "Missing information", description: "Email and password are required.", variant: "error" })
+      return
+    }
+    setIsSaving(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/users/admin`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ email: form.email.trim(), password: form.password, fullName: form.fullName.trim() || undefined }),
+      })
+
+      if (res.ok) {
+        setForm({ email: "", password: "", fullName: "" })
+        await onRefreshUsers()
+        toast({ title: "Admin account created", variant: "success" })
+      } else {
+        const message = await readApiError(res, "Could not create admin account.")
+        toast({ title: "Create admin failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: "Create admin failed", description: "Network error. Please try again.", variant: "error" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      <ModuleHeading title="User Management" description="Search users, review roles and create trusted admin accounts." />
+      <div className="grid gap-6 xl:grid-cols-[1.5fr_0.9fr]">
+        <ConsoleCard className="p-5 sm:p-6">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <SectionHeader title="Users" description={`Showing ${filteredUsers.length}/${users.length} accounts.`} />
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={17} />
+                <Input className="h-11 rounded-2xl border-slate-200 bg-slate-50 pl-10 font-semibold text-slate-950" placeholder="Search name or email..." value={search} onChange={(e) => setSearch(e.target.value)} />
+              </div>
+              <select className={cn(adminSelectClass, "h-11 min-w-40 rounded-2xl")} value={roleFilter} onChange={(e) => setRoleFilter(e.target.value as typeof roleFilter)}>
+                {["all", "user", "space_owner", "admin", "blocked"].map((role) => <option key={role} value={role}>{role}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-5 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 dark:divide-white/10 dark:border-white/10">
+            {filteredUsers.map((user) => (
+              <div key={user.id} className="grid gap-3 bg-white p-4 dark:bg-white/[0.03] md:grid-cols-[1fr_auto] md:items-center">
+                <div className="min-w-0">
+                  <p className="truncate font-black text-slate-950 dark:text-white">{user.full_name || user.email}</p>
+                  <p className="truncate text-sm font-semibold text-slate-500">{user.email}</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <StatusBadge status={user.role} />
+                  <span className="text-xs font-semibold text-slate-500">{formatConsoleDate(user.created_at)}</span>
+                </div>
+              </div>
+            ))}
+            {!filteredUsers.length ? <EmptyConsoleState label="No users match this filter." /> : null}
+          </div>
+        </ConsoleCard>
+
+        <div className="space-y-6">
+          <ConsoleCard className="p-5 sm:p-6">
+            <SectionHeader title="Create Admin Account" description="Only System Admin can create another admin." />
+            <div className="mt-5 space-y-4">
+              <Input className={adminInputClass} placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
+              <Input className={adminInputClass} placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <Input className={adminInputClass} placeholder="Temporary password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Button className="h-12 w-full rounded-2xl bg-blue-600 font-black hover:bg-blue-700" onClick={createAdmin} isLoading={isSaving} loadingText="Creating admin...">
+                <ShieldCheck size={17} className="mr-2" />
+                Create Admin
+              </Button>
+            </div>
+          </ConsoleCard>
+          <RoleGuideCard />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function SystemToolsModule() {
+  const tools = [
+    { title: "QR Assets", description: "Generate, copy and download physical QR labels.", icon: QrCode, href: "/workspace-qr", status: "Ready" },
+    { title: "Global Bookings", description: "Review booking history, analytics and lifecycle status.", icon: CalendarClock, href: "/bookings", status: "Ready" },
+    { title: "No-show Cleanup", description: "Maintenance action lives inside Global Bookings.", icon: Clock, href: "/bookings", status: "Ready" },
+    { title: "System Maintenance", description: "Advanced audit and service health tools.", icon: Wrench, href: null, status: "Coming Soon" },
+  ]
+
+  return (
+    <div className="space-y-6">
+      <ModuleHeading title="System Tools" description="Shortcuts for operational tools and maintenance screens." />
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {tools.map((tool) => {
+          const Icon = tool.icon
+          const content = (
+            <ConsoleCard className="h-full p-5 transition-all hover:-translate-y-0.5 hover:border-blue-300">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-300">
+                <Icon size={21} />
+              </div>
+              <h3 className="mt-5 text-lg font-black text-slate-950 dark:text-white">{tool.title}</h3>
+              <p className="mt-2 text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">{tool.description}</p>
+              <div className="mt-5 flex items-center justify-between">
+                <StatusBadge status={tool.status.toLowerCase().replace(" ", "_")} />
+                {tool.href ? <ExternalLink size={16} className="text-blue-500" /> : <Ban size={16} className="text-slate-400" />}
+              </div>
+            </ConsoleCard>
+          )
+
+          return tool.href ? <a key={tool.title} href={tool.href}>{content}</a> : <div key={tool.title}>{content}</div>
+        })}
+      </div>
+    </div>
+  )
+}
+
+function RoleGuideCard() {
+  const roles = [
+    { title: "User", description: "Browse workspaces, book spaces and check in by QR.", icon: Users },
+    { title: "Space Owner", description: "Manage owned spaces after admin approval.", icon: Building2 },
+    { title: "System Admin", description: "Full system access, approvals, users and tools.", icon: ShieldCheck },
+  ]
+
+  return (
+    <ConsoleCard className="p-5 sm:p-6">
+      <SectionHeader title="Role Guide" description="Permission model used across the console." />
+      <div className="mt-5 space-y-3">
+        {roles.map((role) => {
+          const Icon = role.icon
+          return (
+            <div key={role.title} className="flex gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04]">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                <Icon size={18} />
+              </div>
+              <div>
+                <p className="font-black text-slate-950 dark:text-white">{role.title}</p>
+                <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{role.description}</p>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </ConsoleCard>
+  )
+}
+
+function ConsoleCard({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        "rounded-[1.5rem] border border-slate-200 bg-white shadow-[0_18px_60px_-46px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-slate-950",
+        className,
+      )}
+      {...props}
+    />
+  )
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const normalized = status || "unknown"
+  const palette: Record<string, string> = {
+    approved: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    active: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    ready: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    pending: "border-amber-200 bg-amber-50 text-amber-700",
+    pending_approval: "border-amber-200 bg-amber-50 text-amber-700",
+    draft: "border-slate-200 bg-slate-50 text-slate-600",
+    rejected: "border-rose-200 bg-rose-50 text-rose-700",
+    hidden: "border-slate-300 bg-slate-100 text-slate-600",
+    user: "border-blue-200 bg-blue-50 text-blue-700",
+    space_owner: "border-cyan-200 bg-cyan-50 text-cyan-700",
+    admin: "border-indigo-200 bg-indigo-50 text-indigo-700",
+    coming_soon: "border-slate-200 bg-slate-50 text-slate-500",
+  }
+
+  return (
+    <span className={cn("inline-flex rounded-full border px-3 py-1 text-[10px] font-black uppercase tracking-widest", palette[normalized] ?? palette.draft)}>
+      {normalized.replace("_", " ")}
+    </span>
+  )
+}
+
+function ModuleHeading({ title, description }: { title: string; description: string }) {
+  return (
+    <div>
+      <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white">{title}</h1>
+      <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">{description}</p>
+    </div>
+  )
+}
+
+function SectionHeader({ title, description, count }: { title: string; description: string; count?: number }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <div>
+        <h2 className="text-xl font-black text-slate-950 dark:text-white">{title}</h2>
+        <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">{description}</p>
+      </div>
+      {typeof count === "number" ? (
+        <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-black text-blue-600">
+          {count} items
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
+function ApprovalRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="grid gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-white/[0.04] lg:grid-cols-[1fr_auto] lg:items-center">
+      {children}
+    </div>
+  )
+}
+
+function ApprovalActions({ onApprove, onReject }: { onApprove: () => void; onReject: () => void }) {
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:flex">
+      <Button size="sm" variant="outline" className="rounded-xl font-black">Review</Button>
+      <Button size="sm" className="rounded-xl bg-emerald-600 font-black hover:bg-emerald-700" onClick={onApprove}>Approve</Button>
+      <Button size="sm" variant="outline" className="rounded-xl border-rose-200 font-black text-rose-600 hover:bg-rose-50" onClick={onReject}>Reject</Button>
+    </div>
+  )
+}
+
+function EmptyConsoleState({ label }: { label: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center text-sm font-semibold text-slate-500 dark:border-white/10 dark:bg-white/[0.03]">
+      {label}
+    </div>
+  )
+}
+
+function formatConsoleDate(value: string) {
+  if (!value) return "N/A"
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return "N/A"
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(date)
+}
+
+function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab, compact = false }: SetupGuideProps) {
   const { t } = useLanguage()
   const hasBuilding = buildings.length > 0
   const hasFloor = floors.length > 0
@@ -343,15 +946,15 @@ function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: S
   const completedCount = steps.filter((step) => step.done).length
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white shadow-[0_20px_70px_-46px_rgba(15,23,42,0.45)] dark:border-white/10 dark:bg-slate-950">
-      <CardContent className="p-5 sm:p-6">
-        <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+    <ConsoleCard className="overflow-hidden">
+      <div className={cn("p-5", compact ? "sm:p-5" : "sm:p-6")}>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-blue-700 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-300">
               <CircleDot size={14} />
               {t("admin.guide.title")}
             </div>
-            <h2 className="text-2xl font-black text-slate-950 dark:text-white">{t("admin.guide.heading")}</h2>
+            <h2 className={cn("font-black text-slate-950 dark:text-white", compact ? "text-xl" : "text-2xl")}>{t("admin.guide.heading")}</h2>
             <p className="max-w-2xl text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-400">
               {nextStep ? t("admin.guide.nextStep").replace("{step}", nextStep.label) : t("admin.guide.completed")}
             </p>
@@ -371,7 +974,7 @@ function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: S
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
+        <div className={cn("grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5", compact ? "mt-4" : "mt-6")}>
           {steps.map((step, index) => {
             const isActive = activeTab === step.key
 
@@ -388,22 +991,23 @@ function SetupGuide({ buildings, floors, workspaces, activeTab, onSelectTab }: S
               >
                 <div className="flex items-start gap-3">
                   <div className={cn(
-                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-black",
+                    "flex shrink-0 items-center justify-center rounded-full text-xs font-black",
+                    compact ? "h-8 w-8" : "h-9 w-9",
                     step.done ? "bg-emerald-500 text-white" : "bg-white text-slate-500 shadow-sm dark:bg-white/10 dark:text-slate-400",
                   )}>
                     {step.done ? <CheckCircle2 size={18} /> : index + 1}
                   </div>
                   <div className="space-y-1">
                     <p className="text-sm font-black text-slate-950 dark:text-white">{step.label}</p>
-                    <p className="text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">{step.description}</p>
+                    {!compact ? <p className="text-xs font-semibold leading-relaxed text-slate-500 dark:text-slate-400">{step.description}</p> : null}
                   </div>
                 </div>
               </button>
             )
           })}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </ConsoleCard>
   )
 }
 
