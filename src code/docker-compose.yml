@@ -12,15 +12,15 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
-      # Keep CORS aligned with .env.example — 3002 is the Docker web-final frontend
-      CORS_ALLOWED_ORIGINS: http://localhost:3002
+      # Browser traffic should normally reach the API through web-final's /api proxy.
+      # Keep this configurable for Swagger/direct API checks.
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3002}
     ports:
       - "3001:3001"
     networks:
       - workspace-net
     restart: unless-stopped
     healthcheck:
-      # /health returns {status:'ok'} — dedicated 200 OK endpoint in AppController
       test: ["CMD", "wget", "-qO-", "http://localhost:3001/health"]
       interval: 15s
       timeout: 5s
@@ -32,14 +32,14 @@ services:
       context: .
       dockerfile: Dockerfile.web-final
       args:
-        # NEXT_PUBLIC_* must be passed at build time (baked into Next.js bundle)
+        # NEXT_PUBLIC_* must be passed at build time because Next.js bakes them into the browser bundle.
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
         NEXT_PUBLIC_API_BASE_URL: /api
         API_PROXY_TARGET: http://api:3001
     environment:
       NODE_ENV: production
-      # Server-side env vars for Next.js proxy rewrite (runtime, not baked-in)
+      # Runtime env vars for the Next.js rewrite proxy.
       NEXT_PUBLIC_API_BASE_URL: /api
       API_PROXY_TARGET: http://api:3001
     ports:
@@ -48,7 +48,15 @@ services:
       - workspace-net
     depends_on:
       api:
-        # service_started = container is running (don't block on healthcheck)
-        # healthcheck above still runs for monitoring via `docker ps`
+        condition: service_started
+    restart: unless-stopped
+
+  mobile-tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate --url http://web-final:3002
+    networks:
+      - workspace-net
+    depends_on:
+      web-final:
         condition: service_started
     restart: unless-stopped
