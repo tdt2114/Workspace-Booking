@@ -1,4 +1,5 @@
-FROM node:20-alpine AS deps
+# ── Stage 1: Install dependencies ─────────────────────────────────────────────
+FROM node:20.19-alpine3.21 AS deps
 
 WORKDIR /app
 
@@ -9,8 +10,10 @@ COPY packages/shared/package.json packages/shared/package.json
 
 RUN npm ci
 
+# ── Stage 2: Build Next.js ────────────────────────────────────────────────────
 FROM deps AS build
 
+# Public env vars must be baked in at build time for Next.js
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
 ARG NEXT_PUBLIC_API_BASE_URL=/api
@@ -27,19 +30,36 @@ COPY packages/shared packages/shared
 
 RUN npm run build:final
 
-FROM node:20-alpine AS runner
+# ── Stage 3: Production runner (standalone) ───────────────────────────────────
+# next.config.ts uses output:'standalone' — copies only traced production files,
+# resulting in a much smaller image (~200-400 MB vs ~1-2 GB).
+FROM node:20.19-alpine3.21 AS runner
 
 ENV NODE_ENV=production
+# Runtime env vars for the Next.js proxy rewrite (server-side only)
 ENV NEXT_PUBLIC_API_BASE_URL=/api
 ENV API_PROXY_TARGET=http://api:3001
 
+# Next.js standalone requires HOSTNAME=0.0.0.0 to be accessible outside the container
+ENV HOSTNAME=0.0.0.0
+ENV PORT=3002
+
 WORKDIR /app
 
-COPY --from=build /app/package.json /app/package-lock.json ./
-COPY --from=build /app/node_modules ./node_modules
-COPY --from=build /app/apps/web-final ./apps/web-final
-COPY --from=build /app/packages/shared ./packages/shared
+# Run as non-root for security
+RUN addgroup --system --gid 1001 nodejs && \
+    adduser  --system --uid 1001 nextjs
+
+# Copy standalone server bundle
+COPY --from=build --chown=nextjs:nodejs /app/apps/web-final/.next/standalone ./
+# Copy static assets served by the standalone server
+COPY --from=build --chown=nextjs:nodejs /app/apps/web-final/.next/static ./apps/web-final/.next/static
+# Copy public folder (images, icons, etc.)
+COPY --from=build --chown=nextjs:nodejs /app/apps/web-final/public ./apps/web-final/public
+
+USER nextjs
 
 EXPOSE 3002
 
-CMD ["npm", "run", "start:final"]
+# Standalone output produces a self-contained server.js — no next binary needed
+CMD ["node", "apps/web-final/server.js"]
