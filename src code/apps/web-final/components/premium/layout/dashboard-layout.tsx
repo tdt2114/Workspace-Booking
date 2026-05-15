@@ -5,9 +5,10 @@ import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { AnimatePresence, motion } from "framer-motion"
 import {
-  Bell,
+  Building2,
   CalendarClock,
   CalendarRange,
+  ChevronDown,
   CheckCircle2,
   LayoutDashboard,
   LogOut,
@@ -16,15 +17,16 @@ import {
   PlusCircle,
   QrCode,
   ScanLine,
-  Search,
   Settings,
   ShieldCheck,
+  UserCog,
   X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/premium/ui/button"
 import { LanguageToggle } from "@/components/premium/ui/language-toggle"
 import { ModeToggle } from "@/components/premium/ui/mode-toggle"
+import { NotificationMenu, type NotificationItem } from "@/components/premium/layout/notification-menu"
 import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
@@ -53,6 +55,28 @@ interface BookingsResponse {
   items?: ReminderBooking[]
 }
 
+interface OwnerRequest {
+  id: string
+  user_id: string
+  status: "none" | "pending" | "approved" | "rejected"
+  message: string | null
+  created_at: string
+}
+
+interface OwnerRequestsResponse {
+  items?: OwnerRequest[]
+}
+
+interface WorkspaceApproval {
+  id: string
+  name: string
+  approval_status?: string
+}
+
+interface WorkspacesResponse {
+  items?: WorkspaceApproval[]
+}
+
 function tFallback(t: (path: string) => string, path: string, fallback: string) {
   const value = t(path)
   return value === path ? fallback : value
@@ -64,8 +88,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { locale, t } = useLanguage()
   const [profile, setProfile] = React.useState<MeResponse | null>(null)
   const [bookings, setBookings] = React.useState<ReminderBooking[]>([])
+  const [ownerRequests, setOwnerRequests] = React.useState<OwnerRequest[]>([])
+  const [workspaces, setWorkspaces] = React.useState<WorkspaceApproval[]>([])
   const [currentTime, setCurrentTime] = React.useState(() => Date.now())
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
+  const [userMenuOpen, setUserMenuOpen] = React.useState(false)
+  const userMenuRef = React.useRef<HTMLDivElement | null>(null)
 
   React.useEffect(() => {
     const checkRole = async () => {
@@ -80,9 +108,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         const res = await fetch(`${apiBaseUrl}/me`, {
           headers: { Authorization: `Bearer ${session.access_token}` }
         })
+        let meData: MeResponse | null = null
         if (res.ok) {
-          const data = await res.json() as MeResponse
-          setProfile(data)
+          meData = await res.json() as MeResponse
+          setProfile(meData)
         }
 
         const bookingsRes = await fetch(`${apiBaseUrl}/bookings/my`, {
@@ -91,6 +120,24 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         if (bookingsRes.ok) {
           const data = await bookingsRes.json() as BookingsResponse
           setBookings(data.items ?? [])
+        }
+
+        if (meData?.role === "admin") {
+          const headers = { Authorization: `Bearer ${session.access_token}` }
+          const [ownerRequestsRes, workspacesRes] = await Promise.all([
+            fetch(`${apiBaseUrl}/space-owner-requests`, { headers }),
+            fetch(`${apiBaseUrl}/workspaces`, { headers }),
+          ])
+
+          if (ownerRequestsRes.ok) {
+            const requestsData = await ownerRequestsRes.json() as OwnerRequestsResponse
+            setOwnerRequests(requestsData.items ?? [])
+          }
+
+          if (workspacesRes.ok) {
+            const workspacesData = await workspacesRes.json() as WorkspacesResponse
+            setWorkspaces(workspacesData.items ?? [])
+          }
         }
       } catch (err) {
         console.error("Auth check error:", err)
@@ -104,6 +151,32 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const intervalId = window.setInterval(() => setCurrentTime(Date.now()), 60_000)
     return () => window.clearInterval(intervalId)
   }, [])
+
+  React.useEffect(() => {
+    if (!userMenuOpen) {
+      return
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!userMenuRef.current?.contains(event.target as Node)) {
+        setUserMenuOpen(false)
+      }
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setUserMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown)
+    document.addEventListener("keydown", handleKeyDown)
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown)
+      document.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [userMenuOpen])
 
   const role = profile?.role ?? null
   const isAdmin = role === "admin"
@@ -131,6 +204,75 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       .filter(item => item.priority < 99)
       .sort((a, b) => a.priority - b.priority || a.start - b.start)[0] ?? null
   }, [bookings, currentTime])
+
+  const notifications = React.useMemo<NotificationItem[]>(() => {
+    const checkInWindowMs = 15 * 60 * 1000
+    const upcomingWindowMs = 30 * 60 * 1000
+    const bookingNotifications: NotificationItem[] = []
+
+    bookings
+      .filter(booking => booking.status === "confirmed" || booking.status === "checked_in")
+      .forEach(booking => {
+        const start = new Date(booking.start_time).getTime()
+        const end = new Date(booking.end_time).getTime()
+        const startsInMs = start - currentTime
+        const inCheckInWindow = booking.status === "confirmed" && currentTime >= start - checkInWindowMs && currentTime <= end
+        const activeCheckedIn = booking.status === "checked_in" && currentTime <= end
+        const upcomingSoon = booking.status === "confirmed" && startsInMs > 0 && startsInMs <= upcomingWindowMs
+
+        if (!inCheckInWindow && !activeCheckedIn && !upcomingSoon) {
+          return
+        }
+
+        const startLabel = new Date(booking.start_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })
+
+        bookingNotifications.push({
+          id: `booking-${booking.id}`,
+          title: activeCheckedIn
+            ? tFallback(t, "layout.reminder.activeLabel", "Session active")
+            : inCheckInWindow
+              ? tFallback(t, "layout.reminder.readyLabel", "Ready to check in")
+              : tFallback(t, "layout.reminder.upcomingLabel", "Starting soon"),
+          description: `${booking.workspace_name || tFallback(t, "bookings.workspaceFallback", "Workspace")} - ${startLabel}`,
+          href: activeCheckedIn ? "/bookings" : "/check-in",
+          icon: activeCheckedIn ? CheckCircle2 : CalendarClock,
+          tone: activeCheckedIn ? "emerald" : "blue",
+          urgent: inCheckInWindow,
+        })
+      })
+
+    const ownerRequestNotifications = isAdmin
+      ? ownerRequests
+        .filter(request => request.status === "pending")
+        .slice(0, 5)
+        .map(request => ({
+          id: `owner-request-${request.id}`,
+          title: "Space owner request",
+          description: request.message?.trim() || "A user is waiting for manager approval.",
+          href: "/admin/setup",
+          icon: UserCog,
+          tone: "amber" as const,
+          urgent: true,
+        }))
+      : []
+
+    const workspaceNotifications = isAdmin
+      ? workspaces
+        .filter(workspace => workspace.approval_status === "pending_approval")
+        .slice(0, 5)
+        .map(workspace => ({
+          id: `workspace-${workspace.id}`,
+          title: "Workspace pending approval",
+          description: workspace.name,
+          href: "/admin/setup",
+          icon: Building2,
+          tone: "amber" as const,
+          urgent: true,
+        }))
+      : []
+
+    return [...bookingNotifications, ...ownerRequestNotifications, ...workspaceNotifications]
+  }, [bookings, currentTime, dateLocale, isAdmin, ownerRequests, t, workspaces])
 
   const navItems = [
     { label: t("layout.nav.home"), href: "/dashboard", icon: LayoutDashboard, show: true },
@@ -187,38 +329,87 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="hidden items-center gap-1 rounded-xl border border-slate-200 bg-slate-50 p-1 md:flex dark:border-white/10 dark:bg-white/5">
-              <LanguageToggle />
-              <ModeToggle />
-              <Button variant="ghost" size="icon" className="h-9 w-9 text-slate-700 hover:bg-white hover:text-slate-950 dark:text-white dark:hover:bg-white/10 dark:hover:text-white">
-                <Search size={18} />
-              </Button>
-              <Button variant="ghost" size="icon" className="relative h-9 w-9 text-slate-700 hover:bg-white hover:text-slate-950 dark:text-white dark:hover:bg-white/10 dark:hover:text-white">
-                <Bell size={18} />
-                <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-slate-950" />
-              </Button>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="hidden items-center gap-1 rounded-2xl border border-slate-200 bg-slate-50 p-1 md:flex dark:border-white/10 dark:bg-white/5">
+              <LanguageToggle className="h-9 px-2.5" />
+              <ModeToggle className="h-9 px-2.5" />
             </div>
 
-            <div className="hidden min-w-0 items-center gap-3 border-l border-slate-200 pl-4 dark:border-white/15 sm:flex">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white dark:bg-white dark:text-slate-950">
-                {displayName.slice(0, 1).toUpperCase()}
-              </div>
-              <div className="min-w-0 text-right">
-                <p className="truncate text-sm font-bold leading-none">{displayName}</p>
-                <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-blue-100/80">
-                  {roleLabel}
-                </p>
-              </div>
-            </div>
+            <NotificationMenu notifications={notifications} />
 
-            <button
-              onClick={handleSignOut}
-              className="hidden h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700 transition hover:bg-red-50 hover:text-red-600 dark:bg-white/10 dark:text-white dark:hover:bg-red-500/20 sm:flex"
-              aria-label="Sign out"
-            >
-              <LogOut size={18} />
-            </button>
+            <div ref={userMenuRef} className="relative hidden border-l border-slate-200 pl-2 dark:border-white/15 sm:block">
+              <button
+                onClick={() => setUserMenuOpen(value => !value)}
+                className={cn(
+                  "flex h-11 items-center gap-2 rounded-2xl bg-slate-100 px-1.5 pr-2 text-slate-700 transition hover:bg-slate-200 hover:text-slate-950 dark:bg-white/10 dark:text-white dark:hover:bg-white/15",
+                  userMenuOpen && "bg-blue-600 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-white"
+                )}
+                aria-expanded={userMenuOpen}
+                aria-haspopup="menu"
+                aria-label="Account menu"
+              >
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white ring-1 ring-blue-500/20 dark:bg-white dark:text-slate-950 dark:ring-white/20">
+                  {displayName.slice(0, 1).toUpperCase()}
+                </span>
+                <ChevronDown
+                  size={16}
+                  className={cn("transition-transform", userMenuOpen && "rotate-180")}
+                />
+              </button>
+
+              <AnimatePresence>
+                {userMenuOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                    transition={{ duration: 0.14 }}
+                    className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/15 dark:border-white/10 dark:bg-slate-900 dark:shadow-black/40"
+                    role="menu"
+                  >
+                    <div className="border-b border-slate-100 px-3 py-3 dark:border-white/10">
+                      <p className="truncate text-sm font-black text-slate-950 dark:text-white">{displayName}</p>
+                      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-blue-100/80">
+                        {roleLabel}
+                      </p>
+                    </div>
+
+                    <div className="py-2">
+                      <Link
+                        href="/bookings"
+                        onClick={() => setUserMenuOpen(false)}
+                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
+                        role="menuitem"
+                      >
+                        <CalendarRange size={18} />
+                        {t("layout.nav.myBookings")}
+                      </Link>
+
+                      {(isAdmin || isSpaceOwner) && (
+                        <Link
+                          href="/admin/setup"
+                          onClick={() => setUserMenuOpen(false)}
+                          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
+                          role="menuitem"
+                        >
+                          <Settings size={18} />
+                          {isAdmin ? t("layout.nav.system") : tFallback(t, "layout.nav.mySpaces", "My Spaces")}
+                        </Link>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={handleSignOut}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-black text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
+                      role="menuitem"
+                    >
+                      <LogOut size={18} />
+                      {tFallback(t, "legacy.signOut", "Sign out")}
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
 
             <button
               onClick={() => setMobileMenuOpen(value => !value)}

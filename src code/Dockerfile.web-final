@@ -1,0 +1,45 @@
+FROM node:20-alpine AS deps
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web-final/package.json apps/web-final/package.json
+COPY packages/shared/package.json packages/shared/package.json
+
+RUN npm ci
+
+FROM deps AS build
+
+ARG NEXT_PUBLIC_SUPABASE_URL
+ARG NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ARG NEXT_PUBLIC_API_BASE_URL=/api
+ARG API_PROXY_TARGET=http://api:3001
+
+ENV NEXT_PUBLIC_SUPABASE_URL=$NEXT_PUBLIC_SUPABASE_URL
+ENV NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=$NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL
+ENV API_PROXY_TARGET=$API_PROXY_TARGET
+
+COPY tsconfig.base.json ./
+COPY apps/web-final apps/web-final
+COPY packages/shared packages/shared
+
+RUN npm run build:final
+
+FROM node:20-alpine AS runner
+
+ENV NODE_ENV=production
+ENV NEXT_PUBLIC_API_BASE_URL=/api
+ENV API_PROXY_TARGET=http://api:3001
+
+WORKDIR /app
+
+COPY --from=build /app/package.json /app/package-lock.json ./
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/apps/web-final ./apps/web-final
+COPY --from=build /app/packages/shared ./packages/shared
+
+EXPOSE 3002
+
+CMD ["npm", "run", "start:final"]

@@ -1,0 +1,35 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      CORS_ALLOWED_ORIGINS: http://localhost:3002
+    ports:
+      - "3001:3001"
+    restart: unless-stopped
+
+  web-final:
+    build:
+      context: .
+      dockerfile: Dockerfile.web-final
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_API_BASE_URL: /api
+        API_PROXY_TARGET: http://api:3001
+    env_file:
+      - apps/web-final/.env.local
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_BASE_URL: /api
+      API_PROXY_TARGET: http://api:3001
+    ports:
+      - "3002:3002"
+    depends_on:
+      - api
+    restart: unless-stopped

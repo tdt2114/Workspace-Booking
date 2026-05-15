@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { config } from 'dotenv';
 import { AppModule } from './app.module';
 
@@ -80,6 +81,30 @@ function isAllowedOrigin(origin: string) {
   }
 }
 
+function setupSwagger(app: Awaited<ReturnType<typeof NestFactory.create>>) {
+  const config = new DocumentBuilder()
+    .setTitle('Workspace Booking API')
+    .setDescription('API documentation for the Workspace Booking backend.')
+    .setVersion('0.1.0')
+    .addBearerAuth(
+      {
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Paste a Supabase access token.',
+      },
+      'supabase',
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, config);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: {
+      persistAuthorization: true,
+    },
+  });
+}
+
 async function bootstrap() {
   loadEnvironment();
   const app = await NestFactory.create(AppModule);
@@ -104,8 +129,10 @@ async function bootstrap() {
     },
     credentials: true,
   });
+  setupSwagger(app);
   const port = Number(process.env.PORT ?? 3000);
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`API running on http://localhost:${port}`);
+  console.log(`Swagger docs running on http://localhost:${port}/docs`);
 }
 void bootstrap();
