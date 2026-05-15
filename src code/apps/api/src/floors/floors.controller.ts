@@ -13,7 +13,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiBearerAuth, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
@@ -67,6 +67,19 @@ export class FloorsController {
   @UseGuards(RolesGuard)
   @Roles('admin')
   @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+          description: 'SVG floor map file.',
+        },
+      },
+      required: ['file'],
+    },
+  })
   @UseInterceptors(FileInterceptor('file'))
   uploadSvgMap(
     @Param('id', new ParseUUIDPipe()) id: string,

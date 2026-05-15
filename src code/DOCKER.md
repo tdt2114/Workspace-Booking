@@ -45,7 +45,7 @@ Swagger API docs:
 http://localhost:3001/docs
 ```
 
-For protected endpoints, sign in at `http://localhost:3002/login`, copy the Supabase `access_token` from browser local storage, then use Swagger's `Authorize` button with a Bearer token.
+For protected endpoints, sign in at `http://localhost:3002/login`, copy the Supabase `access_token` from browser local storage, then use Swagger's `Authorize` button with a Bearer token. The main request DTOs are annotated, so Swagger will show example bodies for bookings, check-in, buildings, floors, workspaces, users, and approval flows.
 
 ## Stop
 
