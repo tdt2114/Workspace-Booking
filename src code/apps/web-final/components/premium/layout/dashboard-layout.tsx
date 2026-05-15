@@ -201,11 +201,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         bookingNotifications.push({
           id: `booking-${booking.id}`,
           title: activeCheckedIn
-            ? tFallback(t, "layout.reminder.activeLabel", "Session active")
+            ? t("layout.reminder.activeLabel")
             : inCheckInWindow
-              ? tFallback(t, "layout.reminder.readyLabel", "Ready to check in")
-              : tFallback(t, "layout.reminder.upcomingLabel", "Starting soon"),
-          description: `${booking.workspace_name || tFallback(t, "bookings.workspaceFallback", "Workspace")} - ${startLabel}`,
+              ? t("layout.reminder.readyLabel")
+              : t("layout.reminder.upcomingLabel"),
+          description: `${booking.workspace_name || t("bookings.workspaceFallback")} - ${startLabel}`,
           href: activeCheckedIn ? "/bookings" : "/check-in",
           icon: activeCheckedIn ? CheckCircle2 : CalendarClock,
           tone: activeCheckedIn ? "emerald" : "blue",
@@ -250,8 +250,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     { label: t("layout.nav.home"), href: "/dashboard", icon: LayoutDashboard, show: true },
     { label: t("layout.nav.bookSpace"), href: "/floor-map", icon: Map, show: true },
     { label: t("layout.nav.myBookings"), href: "/bookings", icon: CalendarRange, show: true },
-    { label: tFallback(t, "layout.nav.checkIn", "Check-in"), href: "/check-in", icon: ScanLine, show: true },
-    { label: tFallback(t, "layout.nav.mySpaces", "My Spaces"), href: "/admin/setup", icon: PlusCircle, show: canManageOwnSpaces },
+    { label: t("layout.nav.checkIn"), href: "/check-in", icon: ScanLine, show: true },
+    { label: t("layout.nav.mySpaces"), href: "/admin/setup", icon: PlusCircle, show: canManageOwnSpaces },
     { label: t("layout.nav.qrAssets"), href: "/workspace-qr", icon: QrCode, show: isAdmin },
     { label: t("layout.nav.system"), href: "/admin/setup", icon: Settings, show: isAdmin },
   ].filter(item => item.show)
@@ -259,7 +259,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const roleLabel = isAdmin
     ? t("layout.role.admin")
     : isSpaceOwner
-      ? tFallback(t, "layout.role.spaceOwner", "SPACE OWNER")
+      ? t("layout.role.spaceOwner")
       : t("layout.role.member")
 
   async function handleSignOut() {
@@ -395,16 +395,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <div className="min-w-0">
                   <p className="text-xs font-black uppercase tracking-[0.22em] text-blue-600 dark:text-blue-300">
                     {reminder.activeCheckedIn
-                      ? tFallback(t, "layout.reminder.activeLabel", "Session active")
+                      ? t("layout.reminder.activeLabel")
                       : reminder.inCheckInWindow
-                        ? tFallback(t, "layout.reminder.readyLabel", "Ready to check in")
-                        : tFallback(t, "layout.reminder.upcomingLabel", "Starting soon")}
+                        ? t("layout.reminder.readyLabel")
+                        : t("layout.reminder.upcomingLabel")}
                   </p>
                   <h2 className="mt-1 truncate text-lg font-black text-slate-950 dark:text-white">
-                    {reminder.booking.workspace_name || tFallback(t, "bookings.workspaceFallback", "Workspace")}
+                    {reminder.booking.workspace_name || t("bookings.workspaceFallback")}
                   </h2>
                   <p className="mt-1 text-sm font-semibold text-slate-500 dark:text-slate-400">
-                    {reminder.booking.floor_name || tFallback(t, "bookings.levelFallback", "Level")}
+                    {reminder.booking.floor_name || t("bookings.levelFallback")}
                     {" · "}
                     {new Date(reminder.booking.start_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
                     {" - "}
@@ -417,8 +417,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 <Button asChild className="h-11 rounded-2xl px-5 font-black">
                   <Link href={reminder.activeCheckedIn ? "/bookings" : "/check-in"}>
                     {reminder.activeCheckedIn
-                      ? tFallback(t, "layout.reminder.viewBooking", "View booking")
-                      : tFallback(t, "layout.reminder.checkInNow", "Check in now")}
+                      ? t("layout.reminder.viewBooking")
+                      : t("layout.reminder.checkInNow")}
                   </Link>
                 </Button>
                 <Button asChild variant="outline" className="h-11 rounded-2xl border-slate-200 px-5 font-black text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200">
@@ -439,12 +439,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex flex-col items-center gap-1 rounded-xl px-2 py-2 text-[10px] font-black uppercase tracking-tight",
+                "flex flex-col items-center gap-1 rounded-xl px-1 py-2 text-[9px] font-black uppercase tracking-tighter",
                 active ? "bg-blue-600 text-white" : "text-slate-500 dark:text-slate-400"
               )}
             >
-              <item.icon size={19} />
-              <span className="max-w-full truncate">{item.label.split(" ")[0]}</span>
+              <item.icon size={18} />
+              <span className="max-w-full truncate px-0.5">{item.label}</span>
             </Link>
           )
         })}

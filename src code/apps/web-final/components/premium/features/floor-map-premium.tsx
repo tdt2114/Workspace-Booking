@@ -444,8 +444,23 @@ export function FloorMapPremium() {
   }
 
   if (loading) return (
-    <div className="flex-1 flex items-center justify-center">
-      <div className="w-12 h-12 border-4 border-primary-500/20 border-t-primary-500 rounded-full animate-spin" />
+    <div className="flex flex-col h-full space-y-8">
+      <div className="grid grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Skeleton key={i} className="h-2 w-full rounded-full" />
+        ))}
+      </div>
+
+      <div className="space-y-3">
+        <Skeleton className="h-8 w-40 rounded-full" />
+        <Skeleton className="h-4 w-96" />
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 md:grid-cols-3">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-80 rounded-[2rem]" />
+        ))}
+      </div>
     </div>
   )
 

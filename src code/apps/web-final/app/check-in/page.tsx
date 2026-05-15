@@ -214,6 +214,12 @@ export default function CheckInPage() {
     }
   }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session, t, toast])
 
+  const handleManualToggle = React.useCallback(() => {
+    setManual(true)
+    setStatus("idle")
+    void stopScanner()
+  }, [stopScanner])
+
   const stopScanner = React.useCallback(async () => {
     const scanner = html5QrcodeRef.current
 
@@ -362,7 +368,7 @@ export default function CheckInPage() {
             className="mb-5 inline-flex touch-manipulation items-center gap-2 rounded-2xl border border-slate-200 px-4 py-2 text-sm font-black text-slate-600 transition hover:border-blue-300 hover:text-blue-700 dark:border-white/10 dark:text-slate-300 dark:hover:text-white"
           >
             <ArrowLeft size={18} />
-            {tFallback(t, "checkIn.back", "Quay lai")}
+            {t("checkIn.back")}
           </button>
           <p className="text-xs font-black uppercase tracking-[0.28em] text-blue-600">{t("checkIn.navTitle")}</p>
           <h1 className="mt-3 text-3xl font-black tracking-tight text-slate-950 md:text-5xl dark:text-white">
@@ -385,9 +391,9 @@ export default function CheckInPage() {
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-500/20">
                   {isScannerStarting ? <Loader2 className="animate-spin" size={26} /> : <Camera size={28} />}
                 </span>
-                  <span>
-                    <span className="block text-base font-black text-slate-950 dark:text-white">{t("checkIn.initializeScanner")}</span>
-                  <span className="mt-1 block text-sm font-semibold text-slate-500 dark:text-slate-400">{tFallback(t, "checkIn.scanOptionDesc", "Dung camera de quet QR tai ban.")}</span>
+                <span>
+                  <span className="block text-base font-black text-slate-950 dark:text-white">{t("checkIn.initializeScanner")}</span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-500 dark:text-slate-400">{t("checkIn.scanOptionDesc")}</span>
                 </span>
               </button>
 
@@ -402,7 +408,7 @@ export default function CheckInPage() {
                 </span>
                 <span>
                   <span className="block text-base font-black text-slate-950 dark:text-white">{t("checkIn.useManualShort")}</span>
-                  <span className="mt-1 block text-sm font-semibold text-slate-500 dark:text-slate-400">{tFallback(t, "checkIn.manualOptionDesc", "Nhap ma QR neu camera khong kha dung.")}</span>
+                  <span className="mt-1 block text-sm font-semibold text-slate-500 dark:text-slate-400">{t("checkIn.manualOptionDesc")}</span>
                 </span>
               </button>
             </div>
@@ -415,8 +421,8 @@ export default function CheckInPage() {
                       <Camera size={54} />
                     </div>
                     <div>
-                      <h2 className="text-2xl font-black text-slate-950 dark:text-white">{tFallback(t, "checkIn.scanReadyTitle", "Quet ma QR tai ban")}</h2>
-                      <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-slate-500 dark:text-slate-400">{tFallback(t, "checkIn.scanReadyDesc", "Bat dau quet khi ban dang o dung vi tri da dat.")}</p>
+                      <h2 className="text-2xl font-black text-slate-950 dark:text-white">{t("checkIn.scanReadyTitle")}</h2>
+                      <p className="mx-auto mt-2 max-w-md text-sm font-semibold text-slate-500 dark:text-slate-400">{t("checkIn.scanReadyDesc")}</p>
                     </div>
                     <Button onClick={handleStartScanner} disabled={isScannerStarting || isSubmitting} className="h-12 rounded-2xl px-8 font-black">
                       {isScannerStarting ? <><Loader2 className="mr-2 animate-spin" size={18} />{t("checkIn.openingCamera")}</> : t("checkIn.initializeScanner")}
@@ -510,7 +516,7 @@ export default function CheckInPage() {
                   </div>
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-blue-600">{t("checkIn.useManualShort")}</p>
-                    <h3 className="text-xl font-black text-slate-950 dark:text-white">{tFallback(t, "checkIn.manualTitle", "Check-in thu cong")}</h3>
+                    <h3 className="text-xl font-black text-slate-950 dark:text-white">{t("checkIn.manualTitle")}</h3>
                   </div>
                 </div>
                 <p className="text-sm font-semibold leading-relaxed text-slate-500 dark:text-slate-400">

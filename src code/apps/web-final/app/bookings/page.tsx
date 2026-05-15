@@ -1,4 +1,12 @@
-﻿"use client"
+"use client"
+
+import * as React from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { Calendar, Clock, MapPin, Search, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, Loader2, Info, ChevronRight, BarChart3, TrendingUp, Users, Building2 } from "lucide-react"
+import type { Session } from "@supabase/supabase-js"
+import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
+import { Button } from "@/components/premium/ui/button"
+"use client"
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -13,6 +21,7 @@ import { useToast } from "@/components/premium/ui/toast"
 import { supabase } from "@/lib/supabase/client"
 import { getBrowserApiBaseUrl } from "@/lib/api-base-url"
 import { readApiError } from "@/lib/http-feedback"
+import { Skeleton } from "@/components/premium/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 interface Booking {
@@ -117,11 +126,6 @@ function getBookingDisplayStatus(booking: Booking, now: number): BookingDisplayS
   return "completed"
 }
 
-function tFallback(t: (path: string) => string, path: string, fallback: string) {
-  const value = t(path)
-  return value === path ? fallback : value
-}
-
 export default function BookingsPage() {
   const { t } = useLanguage()
   const { toast } = useToast()
@@ -139,6 +143,49 @@ export default function BookingsPage() {
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-8">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-slate-900">
+            <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-64" />
+                <Skeleton className="h-4 w-96" />
+              </div>
+              <Skeleton className="h-12 w-60 rounded-2xl" />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32 rounded-2xl" />
+            ))}
+          </div>
+
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-slate-900">
+              <div className="flex justify-between items-center mb-6">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-10 w-64" />
+              </div>
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-24 rounded-2xl" />
+                ))}
+              </div>
+            </Card>
+            <div className="space-y-6">
+              <Skeleton className="h-64 rounded-2xl" />
+              <Skeleton className="h-48 rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   const loadAnalytics = React.useCallback(async (token: string) => {
     setAnalyticsLoading(true)
     try {
@@ -149,19 +196,22 @@ export default function BookingsPage() {
       if (res.ok) {
         setAnalytics(await res.json() as AnalyticsResponse)
       } else {
-        const message = await readApiError(res, tFallback(t, "bookings.analytics.loadFailed", "Could not load analytics."))
-        toast({ title: tFallback(t, "bookings.analytics.loadFailed", "Could not load analytics."), description: message, variant: "error" })
+        const message = await readApiError(res, t("bookings.analytics.loadFailed"))
+        toast({ title: t("bookings.analytics.loadFailed"), description: message, variant: "error" })
       }
     } catch (err) {
       console.error("Failed to load analytics:", err)
-      toast({ title: tFallback(t, "bookings.analytics.loadFailed", "Could not load analytics."), description: t("bookings.networkError"), variant: "error" })
+      toast({ title: t("bookings.analytics.loadFailed"), description: t("bookings.networkError"), variant: "error" })
     } finally {
       setAnalyticsLoading(false)
     }
   }, [apiBaseUrl, t, toast])
 
   const loadData = React.useCallback(async (token: string, tab: "my" | "system") => {
-    setLoading(true)
+    if ((tab === "my" && bookings.length === 0) || (tab === "system" && systemBookings.length === 0)) {
+      setLoading(true)
+    }
+    
     try {
       const endpoint = tab === "my" ? "/bookings/my" : "/bookings/manage"
       const res = await fetch(`${apiBaseUrl}${endpoint}`, {
@@ -185,19 +235,24 @@ export default function BookingsPage() {
       setCurrentTime(Date.now())
       setLoading(false)
     }
-  }, [apiBaseUrl, loadAnalytics, role, t, toast])
+  }, [apiBaseUrl, bookings.length, loadAnalytics, role, systemBookings.length, t, toast])
 
   React.useEffect(() => {
     const bootstrap = async () => {
       const { data: { session: currentSession } } = await supabase.auth.getSession()
       if (currentSession) {
         setSession(currentSession)
-        // Simple check for admin role from me endpoint
-        const meRes = await fetch(`${apiBaseUrl}/me`, {
-          headers: { Authorization: `Bearer ${currentSession.access_token}` }
-        })
-        const meData = await meRes.json() as MeResponse
-        setRole(meData.role ?? null)
+        try {
+          const meRes = await fetch(`${apiBaseUrl}/me`, {
+            headers: { Authorization: `Bearer ${currentSession.access_token}` }
+          })
+          if (meRes.ok) {
+            const meData = await meRes.json() as MeResponse
+            setRole(meData.role ?? null)
+          }
+        } catch (err) {
+          console.error("Failed to load profile:", err)
+        }
         void loadData(currentSession.access_token, activeTab)
       }
     }
@@ -301,7 +356,7 @@ export default function BookingsPage() {
                 )}
               >
                 <ShieldCheck size={18} />
-                {isAdmin ? t("bookings.globalAccess") : tFallback(t, "bookings.ownerAccess", "My spaces")}
+                {isAdmin ? t("bookings.globalAccess") : t("bookings.ownerAccess")}
               </button>
             )}
           </div>
@@ -310,7 +365,7 @@ export default function BookingsPage() {
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard label={t("bookings.stats.total")} value={stats.total} icon={<Calendar className="text-blue-500" size={20} />} />
-          <StatCard label={tFallback(t, "bookings.stats.upcoming", "Upcoming")} value={stats.upcoming} icon={<Clock className="text-blue-500" size={20} />} />
+          <StatCard label={t("bookings.stats.upcoming")} value={stats.upcoming} icon={<Clock className="text-blue-500" size={20} />} />
           <StatCard label={t("bookings.stats.live")} value={stats.active} icon={<CheckCircle2 className="text-emerald-500" size={20} />} />
           <StatCard label={t("bookings.stats.finalized")} value={stats.completed} icon={<History className="text-slate-400" size={20} />} />
         </div>
@@ -345,11 +400,7 @@ export default function BookingsPage() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-4 pb-8">
-                {loading ? (
-                  <div className="flex justify-center py-20">
-                    <Loader2 className="h-10 w-10 animate-spin text-blue-500 opacity-40" />
-                  </div>
-                ) : displayedBookings.length > 0 ? (
+                {displayedBookings.length > 0 ? (
                   displayedBookings.map((b) => (
                     <BookingItem 
                       key={b.id}
@@ -459,42 +510,50 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
       <CardHeader className="border-b border-emerald-100 bg-emerald-50 dark:border-white/10 dark:bg-slate-800">
         <CardTitle className="flex items-center gap-2 text-xl font-black text-slate-950 dark:text-white">
           <BarChart3 size={22} className="text-emerald-600 dark:text-emerald-500" />
-          {tFallback(t, "bookings.analytics.title", "Workspace Analytics")}
+          {t("bookings.analytics.title")}
         </CardTitle>
         <CardDescription className="font-semibold text-slate-600 dark:text-slate-400">
           {analytics
-            ? tFallback(t, "bookings.analytics.generated", "Generated at {time}").replace("{time}", new Date(analytics.generatedAt).toLocaleTimeString())
-            : tFallback(t, "bookings.analytics.subtitle", "Occupancy and usage snapshot.")}
+            ? t("bookings.analytics.generated").replace("{time}", new Date(analytics.generatedAt).toLocaleTimeString())
+            : t("bookings.analytics.subtitle")}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-6">
         {isLoading ? (
-          <div className="flex justify-center py-10">
-            <Loader2 className="h-8 w-8 animate-spin text-emerald-500 opacity-40" />
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+              {[1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-24 rounded-2xl" />
+              ))}
+            </div>
+            <div className="grid gap-5 xl:grid-cols-[1.35fr_0.85fr]">
+              <Skeleton className="h-64 rounded-2xl" />
+              <Skeleton className="h-64 rounded-2xl" />
+            </div>
           </div>
         ) : summary ? (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
               <AnalyticsMetric
-                label={tFallback(t, "bookings.analytics.occupancy", "Occupancy")}
+                label={t("bookings.analytics.occupancy")}
                 value={`${summary.occupancyRate}%`}
                 icon={<TrendingUp size={18} />}
                 tone="emerald"
               />
               <AnalyticsMetric
-                label={tFallback(t, "bookings.analytics.noShowRate", "No-show")}
+                label={t("bookings.analytics.noShowRate")}
                 value={`${summary.noShowRate}%`}
                 icon={<XCircle size={18} />}
                 tone="amber"
               />
               <AnalyticsMetric
-                label={tFallback(t, "bookings.analytics.availableNow", "Available now")}
+                label={t("bookings.analytics.availableNow")}
                 value={summary.availableWorkspaces}
                 icon={<CheckCircle2 size={18} />}
                 tone="blue"
               />
               <AnalyticsMetric
-                label={tFallback(t, "bookings.analytics.checkedInNow", "Checked-in")}
+                label={t("bookings.analytics.checkedInNow")}
                 value={summary.checkedInBookings}
                 icon={<Users size={18} />}
                 tone="emerald"
@@ -506,10 +565,10 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                    {tFallback(t, "bookings.analytics.bookingVolume", "Booking volume")}
+                    {t("bookings.analytics.bookingVolume")}
                   </p>
                   <p className="mt-1 text-xs font-semibold text-slate-500">
-                    {tFallback(t, "bookings.analytics.bookingVolumeHint", "Recent demand by day and week.")}
+                    {t("bookings.analytics.bookingVolumeHint")}
                   </p>
                 </div>
                 <span className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-sm font-black text-blue-600 dark:border-primary-500/20 dark:bg-primary-500/10 dark:text-primary-500">
@@ -517,19 +576,19 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
                 </span>
               </div>
               <AnalyticsVolumeBars
-                label={tFallback(t, "bookings.analytics.dailyVolume", "Last 7 days")}
+                label={t("bookings.analytics.dailyVolume")}
                 items={dailyVolume}
               />
               <div className="grid grid-cols-2 gap-3 border-t border-slate-200 pt-3 dark:border-white/5">
                 <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    {tFallback(t, "bookings.analytics.sixWeekTotal", "6-week total")}
+                    {t("bookings.analytics.sixWeekTotal")}
                   </p>
                   <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">{weeklyTotal}</p>
                 </div>
                 <div className="rounded-xl bg-white p-3 dark:bg-slate-900">
                   <p className="text-[9px] font-black uppercase tracking-widest text-slate-500">
-                    {tFallback(t, "bookings.analytics.weeklyPeak", "Weekly peak")}
+                    {t("bookings.analytics.weeklyPeak")}
                   </p>
                   <p className="mt-1 text-xl font-black text-slate-950 dark:text-white">{weeklyPeak}</p>
                 </div>
@@ -539,7 +598,7 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
               <div className="space-y-5">
                 <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  {tFallback(t, "bookings.analytics.topSpaces", "Top used spaces")}
+                  {t("bookings.analytics.topSpaces")}
                 </p>
                 {(analytics.topWorkspaces.length ? analytics.topWorkspaces.slice(0, 3) : []).map((workspace) => (
                   <div key={workspace.workspaceId} className="flex items-center justify-between gap-3">
@@ -553,13 +612,13 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
                   </div>
                 ))}
                 {analytics.topWorkspaces.length === 0 && (
-                  <p className="text-xs font-semibold text-slate-500">{tFallback(t, "bookings.analytics.noTopSpaces", "No booking usage yet.")}</p>
+                  <p className="text-xs font-semibold text-slate-500">{t("bookings.analytics.noTopSpaces")}</p>
                 )}
               </div>
 
                 <div className="space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 dark:border-white/10 dark:bg-slate-800">
                 <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">
-                  {tFallback(t, "bookings.analytics.floorUtilization", "Floor utilization")}
+                  {t("bookings.analytics.floorUtilization")}
                 </p>
                 {topFloors.map((floor) => (
                   <div key={floor.floorId} className="space-y-2">
@@ -581,7 +640,7 @@ function AnalyticsPanel({ analytics, isLoading }: { analytics: AnalyticsResponse
           </div>
         ) : (
           <p className="py-8 text-center text-sm font-semibold text-slate-500">
-            {tFallback(t, "bookings.analytics.empty", "Analytics will appear when system records are loaded.")}
+            {t("bookings.analytics.empty")}
           </p>
         )}
       </CardContent>
@@ -669,8 +728,8 @@ function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemPro
   const { locale, t } = useLanguage()
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const statusConfig: BookingStatusConfig = {
-    upcoming: { label: tFallback(t, "bookings.status.upcoming", "Upcoming"), className: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20" },
-    active: { label: tFallback(t, "bookings.status.active", "Active"), className: "bg-cyan-50 text-cyan-600 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20" },
+    upcoming: { label: t("bookings.status.upcoming"), className: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20" },
+    active: { label: t("bookings.status.active"), className: "bg-cyan-50 text-cyan-600 border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20" },
     checkedIn: { label: t("bookings.status.checkedIn"), className: "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-500 dark:border-emerald-500/20" },
     completed: { label: t("bookings.status.completed"), className: "bg-slate-100 text-slate-500 border-slate-200 dark:bg-slate-500/10 dark:text-slate-400 dark:border-white/5" },
     cancelled: { label: t("bookings.status.cancelled"), className: "bg-rose-50 text-rose-600 border-rose-200 dark:bg-rose-500/10 dark:text-rose-500 dark:border-rose-500/20" },

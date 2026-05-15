@@ -22,6 +22,7 @@ import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { useToast } from "@/components/premium/ui/toast"
 import { useLanguage } from "@/components/premium/language-provider"
+import { Skeleton } from "@/components/premium/ui/skeleton"
 import { cn } from "@/lib/utils"
 
 interface Booking {
@@ -159,9 +160,48 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-slate-950">
-        <Loader2 className="h-12 w-12 animate-spin text-blue-600 opacity-60" />
-      </div>
+      <DashboardLayout>
+        <div className="mx-auto max-w-6xl space-y-8">
+          <div className="border-b border-slate-200 pb-5 dark:border-white/10">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="mt-4 h-10 w-48" />
+            <Skeleton className="mt-4 h-6 w-full max-w-2xl" />
+          </div>
+
+          <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
+            <div className="space-y-4">
+              <Skeleton className="h-6 w-32" />
+              <div className="grid gap-4 sm:grid-cols-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-48 rounded-2xl" />
+                ))}
+              </div>
+            </div>
+            <Skeleton className="h-64 rounded-2xl" />
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-white/10 dark:bg-slate-900">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4 dark:border-white/10">
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-40" />
+                <Skeleton className="h-4 w-60" />
+              </div>
+              <Skeleton className="h-10 w-24" />
+            </div>
+            <div className="mt-5 space-y-4">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="flex gap-4">
+                  <Skeleton className="h-10 w-10 rounded-full" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-1/3" />
+                    <Skeleton className="h-4 w-1/4" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
     )
   }
 
@@ -170,10 +210,10 @@ export default function DashboardPage() {
       <div className="mx-auto max-w-6xl space-y-8" data-testid="dashboard-page">
         <div className="border-b border-slate-200 pb-5 dark:border-white/10">
           <p className="text-sm font-bold uppercase tracking-[0.2em] text-blue-600">
-            {tFallback(t, "dashboard.hub", "Workspace Hub")}
+            {t("dashboard.hub")}
           </p>
           <h1 className="mt-2 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl dark:text-white">
-            {tFallback(t, "dashboard.title", "Dashboard")}
+            {t("dashboard.title")}
           </h1>
           <p className="mt-2 max-w-2xl text-base font-medium text-slate-500">
             {t("dashboard.heroDescription")}
@@ -228,28 +268,28 @@ export default function DashboardPage() {
         <section className="grid gap-6 lg:grid-cols-[1fr_360px]">
           <div className="space-y-4">
             <h2 className="text-xl font-black text-slate-950 dark:text-white">
-              {tFallback(t, "dashboard.quickActions", "Quick Actions")}
+              {t("dashboard.quickActions")}
             </h2>
             <div className="grid gap-4 sm:grid-cols-3">
               <QuickAction
                 href="/floor-map"
                 icon={<Calendar size={32} />}
                 label={t("layout.nav.bookSpace")}
-                description={tFallback(t, "dashboard.quickBookHint", "Reserve a space for your work session.")}
+                description={t("dashboard.quickBookHint")}
                 tone="blue"
               />
               <QuickAction
                 href="/check-in"
                 icon={<QrCode size={32} />}
-                label={tFallback(t, "layout.nav.checkIn", "Check-in")}
-                description={tFallback(t, "dashboard.quickCheckInHint", "Scan QR or enter your workspace code.")}
+                label={t("layout.nav.checkIn")}
+                description={t("dashboard.quickCheckInHint")}
                 tone="emerald"
               />
               <QuickAction
                 href="/bookings"
                 icon={<LayoutList size={32} />}
                 label={t("layout.nav.myBookings")}
-                description={tFallback(t, "dashboard.quickHistoryHint", "Review, cancel or manage reservations.")}
+                description={t("dashboard.quickHistoryHint")}
                 tone="slate"
               />
             </div>
@@ -262,10 +302,10 @@ export default function DashboardPage() {
           <div className="flex flex-col gap-3 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/10">
             <div>
               <h2 className="text-xl font-black text-slate-950 dark:text-white">
-                {tFallback(t, "dashboard.recentActivity", "Recent Activity")}
+                {t("dashboard.recentActivity")}
               </h2>
               <p className="text-sm font-medium text-slate-500">
-                {tFallback(t, "dashboard.recentActivityHint", "Latest booking updates from your account.")}
+                {t("dashboard.recentActivityHint")}
               </p>
             </div>
             <Button asChild variant="outline" className="border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200">
@@ -333,7 +373,7 @@ function NextBookingCard({ booking, dateLocale }: { booking: Booking | null; dat
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-950 dark:text-white">
-            {tFallback(t, "dashboard.nextBooking", "Next Booking")}
+            {t("dashboard.nextBooking")}
           </h2>
           {booking ? (
             <>
