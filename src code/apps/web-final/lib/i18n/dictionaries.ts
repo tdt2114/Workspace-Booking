@@ -33,6 +33,16 @@ export const dictionaries = {
         checkInNow: "Check in now",
         viewBooking: "View booking",
       },
+      notifications: {
+        title: "Notifications",
+        count: "{count} items need attention",
+        clear: "Everything is clear",
+        emptyTitle: "No notifications",
+        emptyDescription: "Booking reminders and admin approvals will appear here.",
+        ownerRequest: "Space owner request",
+        ownerRequestFallback: "A user is waiting for manager approval.",
+        workspaceApproval: "Workspace pending approval",
+      },
     },
     login: {
       brandTitle: "Workspace",
@@ -422,6 +432,16 @@ export const dictionaries = {
         upcomingLabel: "Sắp bắt đầu",
         checkInNow: "Check-in ngay",
         viewBooking: "Xem lịch đặt",
+      },
+      notifications: {
+        title: "Thông báo",
+        count: "{count} mục cần xử lý",
+        clear: "Không có việc cần xử lý",
+        emptyTitle: "Không có thông báo",
+        emptyDescription: "Nhắc lịch đặt chỗ và phê duyệt của admin sẽ hiển thị tại đây.",
+        ownerRequest: "Yêu cầu làm quản lý space",
+        ownerRequestFallback: "Có người dùng đang chờ admin phê duyệt.",
+        workspaceApproval: "Workspace chờ phê duyệt",
       },
     },
     login: {

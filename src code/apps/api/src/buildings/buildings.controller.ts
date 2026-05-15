@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
@@ -18,6 +19,8 @@ import { UpdateBuildingDto } from './dto/update-building.dto';
 
 @Controller('buildings')
 @UseGuards(SupabaseAuthGuard)
+@ApiTags('Buildings')
+@ApiBearerAuth('supabase')
 export class BuildingsController {
   constructor(private readonly buildingsService: BuildingsService) {}
 

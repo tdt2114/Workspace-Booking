@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
@@ -23,6 +24,8 @@ import { RunNoShowDto } from './dto/run-no-show.dto';
 
 @Controller('bookings')
 @UseGuards(SupabaseAuthGuard)
+@ApiTags('Bookings')
+@ApiBearerAuth('supabase')
 export class BookingsController {
   constructor(private readonly bookingsService: BookingsService) {}
 

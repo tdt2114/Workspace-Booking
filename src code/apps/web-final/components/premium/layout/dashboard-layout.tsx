@@ -8,7 +8,6 @@ import {
   Building2,
   CalendarClock,
   CalendarRange,
-  ChevronDown,
   CheckCircle2,
   LayoutDashboard,
   LogOut,
@@ -26,6 +25,7 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/premium/ui/button"
 import { LanguageToggle } from "@/components/premium/ui/language-toggle"
 import { ModeToggle } from "@/components/premium/ui/mode-toggle"
+import { AccountMenu } from "@/components/premium/layout/account-menu"
 import { NotificationMenu, type NotificationItem } from "@/components/premium/layout/notification-menu"
 import { useLanguage } from "@/components/premium/language-provider"
 import { supabase } from "@/lib/supabase/client"
@@ -92,8 +92,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [workspaces, setWorkspaces] = React.useState<WorkspaceApproval[]>([])
   const [currentTime, setCurrentTime] = React.useState(() => Date.now())
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false)
-  const [userMenuOpen, setUserMenuOpen] = React.useState(false)
-  const userMenuRef = React.useRef<HTMLDivElement | null>(null)
 
   React.useEffect(() => {
     const checkRole = async () => {
@@ -151,32 +149,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     const intervalId = window.setInterval(() => setCurrentTime(Date.now()), 60_000)
     return () => window.clearInterval(intervalId)
   }, [])
-
-  React.useEffect(() => {
-    if (!userMenuOpen) {
-      return
-    }
-
-    function handlePointerDown(event: PointerEvent) {
-      if (!userMenuRef.current?.contains(event.target as Node)) {
-        setUserMenuOpen(false)
-      }
-    }
-
-    function handleKeyDown(event: KeyboardEvent) {
-      if (event.key === "Escape") {
-        setUserMenuOpen(false)
-      }
-    }
-
-    document.addEventListener("pointerdown", handlePointerDown)
-    document.addEventListener("keydown", handleKeyDown)
-
-    return () => {
-      document.removeEventListener("pointerdown", handlePointerDown)
-      document.removeEventListener("keydown", handleKeyDown)
-    }
-  }, [userMenuOpen])
 
   const role = profile?.role ?? null
   const isAdmin = role === "admin"
@@ -247,8 +219,8 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         .slice(0, 5)
         .map(request => ({
           id: `owner-request-${request.id}`,
-          title: "Space owner request",
-          description: request.message?.trim() || "A user is waiting for manager approval.",
+          title: tFallback(t, "layout.notifications.ownerRequest", "Space owner request"),
+          description: request.message?.trim() || tFallback(t, "layout.notifications.ownerRequestFallback", "A user is waiting for manager approval."),
           href: "/admin/setup",
           icon: UserCog,
           tone: "amber" as const,
@@ -262,7 +234,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         .slice(0, 5)
         .map(workspace => ({
           id: `workspace-${workspace.id}`,
-          title: "Workspace pending approval",
+          title: tFallback(t, "layout.notifications.workspaceApproval", "Workspace pending approval"),
           description: workspace.name,
           href: "/admin/setup",
           icon: Building2,
@@ -337,79 +309,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
             <NotificationMenu notifications={notifications} />
 
-            <div ref={userMenuRef} className="relative hidden border-l border-slate-200 pl-2 dark:border-white/15 sm:block">
-              <button
-                onClick={() => setUserMenuOpen(value => !value)}
-                className={cn(
-                  "flex h-11 items-center gap-2 rounded-2xl bg-slate-100 px-1.5 pr-2 text-slate-700 transition hover:bg-slate-200 hover:text-slate-950 dark:bg-white/10 dark:text-white dark:hover:bg-white/15",
-                  userMenuOpen && "bg-blue-600 text-white hover:bg-blue-600 dark:bg-white dark:text-slate-950 dark:hover:bg-white"
-                )}
-                aria-expanded={userMenuOpen}
-                aria-haspopup="menu"
-                aria-label="Account menu"
-              >
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-black text-white ring-1 ring-blue-500/20 dark:bg-white dark:text-slate-950 dark:ring-white/20">
-                  {displayName.slice(0, 1).toUpperCase()}
-                </span>
-                <ChevronDown
-                  size={16}
-                  className={cn("transition-transform", userMenuOpen && "rotate-180")}
-                />
-              </button>
-
-              <AnimatePresence>
-                {userMenuOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 8, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 8, scale: 0.98 }}
-                    transition={{ duration: 0.14 }}
-                    className="absolute right-0 top-14 z-50 w-72 overflow-hidden rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl shadow-slate-900/15 dark:border-white/10 dark:bg-slate-900 dark:shadow-black/40"
-                    role="menu"
-                  >
-                    <div className="border-b border-slate-100 px-3 py-3 dark:border-white/10">
-                      <p className="truncate text-sm font-black text-slate-950 dark:text-white">{displayName}</p>
-                      <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-blue-100/80">
-                        {roleLabel}
-                      </p>
-                    </div>
-
-                    <div className="py-2">
-                      <Link
-                        href="/bookings"
-                        onClick={() => setUserMenuOpen(false)}
-                        className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
-                        role="menuitem"
-                      >
-                        <CalendarRange size={18} />
-                        {t("layout.nav.myBookings")}
-                      </Link>
-
-                      {(isAdmin || isSpaceOwner) && (
-                        <Link
-                          href="/admin/setup"
-                          onClick={() => setUserMenuOpen(false)}
-                          className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-bold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950 dark:text-slate-200 dark:hover:bg-white/10 dark:hover:text-white"
-                          role="menuitem"
-                        >
-                          <Settings size={18} />
-                          {isAdmin ? t("layout.nav.system") : tFallback(t, "layout.nav.mySpaces", "My Spaces")}
-                        </Link>
-                      )}
-                    </div>
-
-                    <button
-                      onClick={handleSignOut}
-                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-black text-red-600 transition hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-500/10"
-                      role="menuitem"
-                    >
-                      <LogOut size={18} />
-                      {tFallback(t, "legacy.signOut", "Sign out")}
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
+            <AccountMenu
+              displayName={displayName}
+              roleLabel={roleLabel}
+              isAdmin={isAdmin}
+              isSpaceOwner={isSpaceOwner}
+              onSignOut={handleSignOut}
+            />
 
             <button
               onClick={() => setMobileMenuOpen(value => !value)}

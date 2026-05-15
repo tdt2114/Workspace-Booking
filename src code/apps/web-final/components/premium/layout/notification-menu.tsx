@@ -5,6 +5,7 @@ import Link from "next/link"
 import { AnimatePresence, motion } from "framer-motion"
 import { Bell, CheckCircle2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useLanguage } from "@/components/premium/language-provider"
 
 export interface NotificationItem {
   id: string
@@ -21,6 +22,7 @@ interface NotificationMenuProps {
 }
 
 export function NotificationMenu({ notifications }: NotificationMenuProps) {
+  const { t } = useLanguage()
   const [open, setOpen] = React.useState(false)
   const menuRef = React.useRef<HTMLDivElement | null>(null)
   const notificationCount = notifications.length
@@ -61,7 +63,7 @@ export function NotificationMenu({ notifications }: NotificationMenuProps) {
         )}
         aria-expanded={open}
         aria-haspopup="menu"
-        aria-label="Notifications"
+        aria-label={t("layout.notifications.title")}
       >
         <Bell size={19} />
         {notificationCount > 0 && (
@@ -82,9 +84,11 @@ export function NotificationMenu({ notifications }: NotificationMenuProps) {
             role="menu"
           >
             <div className="border-b border-slate-100 px-3 py-3 dark:border-white/10">
-              <p className="text-sm font-black text-slate-950 dark:text-white">Notifications</p>
+              <p className="text-sm font-black text-slate-950 dark:text-white">{t("layout.notifications.title")}</p>
               <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                {notificationCount ? `${notificationCount} item${notificationCount > 1 ? "s" : ""} need attention` : "Everything is clear"}
+                {notificationCount
+                  ? t("layout.notifications.count").replace("{count}", String(notificationCount))
+                  : t("layout.notifications.clear")}
               </p>
             </div>
 
@@ -125,9 +129,9 @@ export function NotificationMenu({ notifications }: NotificationMenuProps) {
                   <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-300">
                     <CheckCircle2 size={22} />
                   </div>
-                  <p className="mt-3 text-sm font-black text-slate-950 dark:text-white">No notifications</p>
+                  <p className="mt-3 text-sm font-black text-slate-950 dark:text-white">{t("layout.notifications.emptyTitle")}</p>
                   <p className="mt-1 text-xs font-semibold text-slate-500 dark:text-slate-400">
-                    Booking reminders and admin approvals will appear here.
+                    {t("layout.notifications.emptyDescription")}
                   </p>
                 </div>
               )}

@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
@@ -20,6 +21,8 @@ import { WorkspacesService } from './workspaces.service';
 
 @Controller('workspaces')
 @UseGuards(SupabaseAuthGuard)
+@ApiTags('Workspaces')
+@ApiBearerAuth('supabase')
 export class WorkspacesController {
   constructor(private readonly workspacesService: WorkspacesService) {}
 
