@@ -10,6 +10,9 @@ test-results/
 playwright-report/
 .mobile-dev/
 
+# deprecated local frontend copy
+/apps/web/
+
 # env files
 **/.env
 **/.env.e2e
