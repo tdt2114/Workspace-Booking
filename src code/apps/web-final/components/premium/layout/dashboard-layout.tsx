@@ -369,7 +369,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 className="flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10"
               >
                 <LogOut size={19} />
-                Sign out
+                {t("legacy.signOut")}
               </button>
             </div>
           </motion.div>

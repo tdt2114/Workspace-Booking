@@ -243,24 +243,34 @@ export default function DashboardPage() {
                   <UserPlus size={24} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-slate-950 dark:text-white">Request to become Space Owner</h2>
+                  <h2 className="text-lg font-black text-slate-950 dark:text-white">{t("dashboard.ownerRequest.title")}</h2>
                   <p className="mt-1 text-sm font-semibold text-slate-600 dark:text-slate-300">
                     {ownerRequestStatus === "pending"
-                      ? "Your request is pending System Admin approval."
+                      ? t("dashboard.ownerRequest.pending")
                       : ownerRequestStatus === "rejected"
-                        ? "Your previous request was rejected. You can submit again with updated details."
-                        : "Send a request to publish and manage your own workspaces."}
+                        ? t("dashboard.ownerRequest.rejected")
+                        : t("dashboard.ownerRequest.description")}
                   </p>
                 </div>
               </div>
-              <Button
-                className="h-11 rounded-xl font-black"
+              <button
+                className={cn(
+                  "flex h-11 items-center justify-center rounded-xl px-5 font-black transition-all",
+                  ownerRequestLoading || ownerRequestStatus === "pending"
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-white/5"
+                    : "bg-blue-600 text-white hover:bg-blue-700 shadow-md shadow-blue-500/20"
+                )}
                 onClick={handleRequestSpaceOwner}
-                isLoading={ownerRequestLoading}
                 disabled={ownerRequestLoading || ownerRequestStatus === "pending"}
               >
-                {ownerRequestStatus === "pending" ? "Pending approval" : "Request access"}
-              </Button>
+                {ownerRequestLoading ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : ownerRequestStatus === "pending" ? (
+                  t("dashboard.ownerRequest.pendingButton")
+                ) : (
+                  t("dashboard.ownerRequest.requestButton")
+                )}
+              </button>
             </div>
           </section>
         )}
@@ -411,6 +421,7 @@ function NextBookingCard({ booking, dateLocale }: { booking: Booking | null; dat
 }
 
 function ActivityItem({ booking, index, dateLocale }: { booking: Booking; index: number; dateLocale?: string }) {
+  const { t } = useLanguage()
   const status = booking.status
   const tone = {
     confirmed: "bg-blue-50 text-blue-600 dark:bg-blue-500/10",
@@ -432,7 +443,7 @@ function ActivityItem({ booking, index, dateLocale }: { booking: Booking; index:
           {booking.workspace_name}
         </p>
         <p className="text-sm font-medium text-slate-500">
-          {booking.status.replace("_", " ")} · {new Date(booking.start_time).toLocaleDateString(dateLocale)} {new Date(booking.start_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
+          {t(`bookings.status.${booking.status === 'checked_in' ? 'checkedIn' : booking.status === 'no_show' ? 'noShow' : booking.status}`)} · {new Date(booking.start_time).toLocaleDateString(dateLocale)} {new Date(booking.start_time).toLocaleTimeString(dateLocale, { hour: "2-digit", minute: "2-digit" })}
         </p>
       </div>
     </div>

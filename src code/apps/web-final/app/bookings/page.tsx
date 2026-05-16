@@ -3,7 +3,7 @@
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Calendar, Clock, MapPin, Search, XCircle, CheckCircle2, History, ShieldCheck, Play, Settings2, Loader2, Info, ChevronRight, BarChart3, TrendingUp, Users, Building2 } from "lucide-react"
-import type { Session } from "@supabase/supabase-js"
+import { useRouter } from "next/navigation"
 import { DashboardLayout } from "@/components/premium/layout/dashboard-layout"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/premium/ui/card"
@@ -119,9 +119,9 @@ function getBookingDisplayStatus(booking: Booking, now: number): BookingDisplayS
 }
 
 export default function BookingsPage() {
+  const router = useRouter()
   const { t } = useLanguage()
   const { toast } = useToast()
-  const [session, setSession] = React.useState<Session | null>(null)
   const [activeTab, setActiveTab] = React.useState<"my" | "system">("my")
   const [bookings, setBookings] = React.useState<Booking[]>([])
   const [systemBookings, setSystemBookings] = React.useState<Booking[]>([])
@@ -135,48 +135,6 @@ export default function BookingsPage() {
 
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
 
-  if (loading) {
-    return (
-      <DashboardLayout>
-        <div className="space-y-8">
-          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-slate-900">
-            <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-10 w-64" />
-                <Skeleton className="h-4 w-96" />
-              </div>
-              <Skeleton className="h-12 w-60 rounded-2xl" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {[1, 2, 3, 4].map((i) => (
-              <Skeleton key={i} className="h-32 rounded-2xl" />
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-            <Card className="border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-slate-900">
-              <div className="flex justify-between items-center mb-6">
-                <Skeleton className="h-8 w-48" />
-                <Skeleton className="h-10 w-64" />
-              </div>
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <Skeleton key={i} className="h-24 rounded-2xl" />
-                ))}
-              </div>
-            </Card>
-            <div className="space-y-6">
-              <Skeleton className="h-64 rounded-2xl" />
-              <Skeleton className="h-48 rounded-2xl" />
-            </div>
-          </div>
-        </div>
-      </DashboardLayout>
-    )
-  }
 
   const loadAnalytics = React.useCallback(async (token: string) => {
     setAnalyticsLoading(true)
@@ -199,60 +157,106 @@ export default function BookingsPage() {
     }
   }, [apiBaseUrl, t, toast])
 
-  const loadData = React.useCallback(async (token: string, tab: "my" | "system") => {
-    if ((tab === "my" && bookings.length === 0) || (tab === "system" && systemBookings.length === 0)) {
-      setLoading(true)
+  const hasFetchedRef = React.useRef(false)
+
+  React.useEffect(() => {
+    if (hasFetchedRef.current) return
+    hasFetchedRef.current = true
+
+    let mounted = true
+    const base = apiBaseUrl
+
+    const run = async () => {
+      const { data: { session: currentSession } } = await supabase.auth.getSession()
+      if (!currentSession) {
+        router.push("/login")
+        return
+      }
+
+      if (mounted) {
+        setLoading(true)
+      }
+
+      const token = currentSession.access_token
+
+      try {
+        // Fetch role first
+        let currentRole: string | null = null
+        try {
+          const meRes = await fetch(`${base}/me`, { headers: { Authorization: `Bearer ${token}` } })
+          if (meRes.ok) {
+            const meData = await meRes.json() as MeResponse
+            currentRole = meData.role ?? null
+            if (mounted) setRole(currentRole)
+          }
+        } catch { /* non-fatal */ }
+
+        // Fetch bookings
+        const endpoint = "/bookings/my"
+        const res = await fetch(`${base}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } })
+        if (res.ok) {
+          const data = await res.json() as BookingsResponse
+          if (mounted) setBookings(data.items || [])
+        } else {
+          const message = await readApiError(res, t("bookings.loadFailed"))
+          if (mounted) toast({ title: t("bookings.loadFailed"), description: message, variant: "error" })
+        }
+      } catch (err) {
+        console.error("Failed to load bookings:", err)
+        if (mounted) toast({ title: t("bookings.loadFailed"), description: t("bookings.networkError"), variant: "error" })
+      } finally {
+        if (mounted) {
+          setCurrentTime(Date.now())
+          setLoading(false)
+        }
+      }
     }
-    
+
+    void run()
+    return () => { mounted = false }
+    // Run only once on mount — deps intentionally omitted
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const fetchTabData = React.useCallback(async (tab: "my" | "system") => {
+    const { data: { session: currentSession } } = await supabase.auth.getSession()
+    if (!currentSession) return
+    setLoading(true)
+    const token = currentSession.access_token
+    const base = apiBaseUrl
     try {
       const endpoint = tab === "my" ? "/bookings/my" : "/bookings/manage"
-      const res = await fetch(`${apiBaseUrl}${endpoint}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const res = await fetch(`${base}${endpoint}`, { headers: { Authorization: `Bearer ${token}` } })
       if (res.ok) {
         const data = await res.json() as BookingsResponse
         if (tab === "my") setBookings(data.items || [])
         else {
           setSystemBookings(data.items || [])
-          if (role === "admin") void loadAnalytics(token)
+          if (role === "admin") {
+            setAnalyticsLoading(true)
+            try {
+              const aRes = await fetch(`${base}/bookings/analytics`, { headers: { Authorization: `Bearer ${token}` } })
+              if (aRes.ok) setAnalytics(await aRes.json() as AnalyticsResponse)
+            } catch { /* non-fatal */ } finally {
+              setAnalyticsLoading(false)
+            }
+          }
         }
       } else {
         const message = await readApiError(res, t("bookings.loadFailed"))
         toast({ title: t("bookings.loadFailed"), description: message, variant: "error" })
       }
-    } catch (err) {
-      console.error("Failed to load bookings:", err)
+    } catch {
       toast({ title: t("bookings.loadFailed"), description: t("bookings.networkError"), variant: "error" })
     } finally {
       setCurrentTime(Date.now())
       setLoading(false)
     }
-  }, [apiBaseUrl, bookings.length, loadAnalytics, role, systemBookings.length, t, toast])
-
-  React.useEffect(() => {
-    const bootstrap = async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession()
-      if (currentSession) {
-        setSession(currentSession)
-        try {
-          const meRes = await fetch(`${apiBaseUrl}/me`, {
-            headers: { Authorization: `Bearer ${currentSession.access_token}` }
-          })
-          if (meRes.ok) {
-            const meData = await meRes.json() as MeResponse
-            setRole(meData.role ?? null)
-          }
-        } catch (err) {
-          console.error("Failed to load profile:", err)
-        }
-        void loadData(currentSession.access_token, activeTab)
-      }
-    }
-    void bootstrap()
-  }, [apiBaseUrl, activeTab, loadData])
+  }, [apiBaseUrl, role, t, toast])
 
   const handleAction = async (bookingId: string, action: 'cancel' | 'no-show' | 'complete') => {
-    if (!session) return
+    const { data: { session: currentSession } } = await supabase.auth.getSession()
+    if (!currentSession) return
     const loadingKey = action === "cancel" ? bookingId : action
     setActionLoading(loadingKey)
     try {
@@ -272,12 +276,12 @@ export default function BookingsPage() {
         method: method,
         headers: { 
           "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}` 
+          Authorization: `Bearer ${currentSession.access_token}` 
         }
       })
       
       if (res.ok) {
-        void loadData(session.access_token, activeTab)
+        void fetchTabData(activeTab)
         toast({
           title: t("bookings.actionSuccess"),
           description: t(`bookings.actions.${action}`),
@@ -316,6 +320,47 @@ export default function BookingsPage() {
     }
   }, [activeTab, bookings, currentTime, systemBookings])
 
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-8">
+          <div className="rounded-[2rem] border border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-slate-900">
+            <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-64" />
+                <Skeleton className="h-4 w-96" />
+              </div>
+              <Skeleton className="h-12 w-60 rounded-2xl" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {[1, 2, 3, 4].map((i) => (
+              <Skeleton key={i} className="h-32 rounded-2xl" />
+            ))}
+          </div>
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+            <Card className="border-slate-200 bg-white p-6 dark:border-white/10 dark:bg-slate-900">
+              <div className="flex justify-between items-center mb-6">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-10 w-64" />
+              </div>
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <Skeleton key={i} className="h-24 rounded-2xl" />
+                ))}
+              </div>
+            </Card>
+            <div className="space-y-6">
+              <Skeleton className="h-64 rounded-2xl" />
+              <Skeleton className="h-48 rounded-2xl" />
+            </div>
+          </div>
+        </div>
+      </DashboardLayout>
+    )
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-8" data-testid="bookings-page">
@@ -329,7 +374,7 @@ export default function BookingsPage() {
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-1.5 dark:border-white/10 dark:bg-white/5">
             <button 
               data-testid="bookings-tab-my"
-              onClick={() => setActiveTab("my")}
+              onClick={() => { setActiveTab("my"); void fetchTabData("my") }}
               className={cn(
                 "flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black transition-all",
                 activeTab === "my" ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
@@ -341,7 +386,7 @@ export default function BookingsPage() {
             {canViewManagedBookings && (
               <button 
                 data-testid="bookings-tab-system"
-                onClick={() => setActiveTab("system")}
+                onClick={() => { setActiveTab("system"); void fetchTabData("system") }}
                 className={cn(
                   "flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-black transition-all",
                   activeTab === "system" ? "bg-blue-600 text-white shadow-lg shadow-blue-500/20" : "text-slate-600 hover:bg-white hover:text-slate-950 dark:text-slate-300 dark:hover:bg-white/10 dark:hover:text-white"
