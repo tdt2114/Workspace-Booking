@@ -13,26 +13,6 @@ export const dictionaries = {
       switchToDark: "Switch to dark mode",
     },
     layout: {
-      nav: {
-        home: "Home",
-        bookSpace: "Book Space",
-        myBookings: "My Bookings",
-        checkIn: "Check-in",
-        qrAssets: "QR Assets",
-        system: "System",
-      },
-      role: {
-        admin: "ADMIN ACCESS",
-        executive: "EXECUTIVE",
-        member: "PRO MEMBER",
-      },
-      reminder: {
-        activeLabel: "Session active",
-        readyLabel: "Ready to check in",
-        upcomingLabel: "Starting soon",
-        checkInNow: "Check in now",
-        viewBooking: "View booking",
-      },
       notifications: {
         title: "Notifications",
         count: "{count} items need attention",
@@ -65,6 +45,7 @@ export const dictionaries = {
         checkInNow: "Check in now",
         viewBooking: "View booking",
       },
+    },
     login: {
       brandTitle: "Workspace",
       brandAccent: "Executive",
@@ -158,12 +139,6 @@ export const dictionaries = {
       cameraHttpsRequired: "Camera access requires HTTPS or localhost.",
       invalidQr: "Invalid QR code or session mismatch.",
       networkError: "Network error. Please try again.",
-      back: "Back",
-      scanOptionDesc: "Use your camera to scan the static desk QR label.",
-      manualOptionDesc: "Enter the QR value manually if camera access is unavailable.",
-      scanReadyTitle: "Scan the desk QR label",
-      scanReadyDesc: "Start the scanner when you are physically at the reserved workspace.",
-      manualTitle: "Manual check-in",
     },
     bookings: {
       title: "Booking Operations",
@@ -440,26 +415,6 @@ export const dictionaries = {
       switchToDark: "Chuyển sang chế độ tối",
     },
     layout: {
-      nav: {
-        home: "Trang chủ",
-        bookSpace: "Đặt chỗ",
-        myBookings: "Lịch đặt",
-        checkIn: "Check-in",
-        qrAssets: "Mã QR",
-        system: "Hệ thống",
-      },
-      role: {
-        admin: "QUYỀN QUẢN TRỊ",
-        executive: "NGƯỜI DÙNG",
-        member: "THÀNH VIÊN PRO",
-      },
-      reminder: {
-        activeLabel: "Phiên đang hoạt động",
-        readyLabel: "Đã đến giờ check-in",
-        upcomingLabel: "Sắp bắt đầu",
-        checkInNow: "Check-in ngay",
-        viewBooking: "Xem lịch đặt",
-      },
       notifications: {
         title: "Thông báo",
         count: "{count} mục cần xử lý",
@@ -492,6 +447,7 @@ export const dictionaries = {
         checkInNow: "Check-in ngay",
         viewBooking: "Xem lịch đặt",
       },
+    },
     login: {
       brandTitle: "Workspace",
       brandAccent: "Executive",
@@ -829,3 +785,4 @@ export const dictionaries = {
     },
   },
 } as const
+

@@ -214,12 +214,6 @@ export default function CheckInPage() {
     }
   }, [apiBaseUrl, enableTestScanTime, manualScannedAt, nextBooking, session, t, toast])
 
-  const handleManualToggle = React.useCallback(() => {
-    setManual(true)
-    setStatus("idle")
-    void stopScanner()
-  }, [stopScanner])
-
   const stopScanner = React.useCallback(async () => {
     const scanner = html5QrcodeRef.current
 
@@ -243,6 +237,12 @@ export default function CheckInPage() {
       console.error("Failed to clear scanner:", err)
     }
   }, [])
+
+  const handleManualToggle = React.useCallback(() => {
+    setManual(true)
+    setStatus("idle")
+    void stopScanner()
+  }, [stopScanner])
 
   React.useEffect(() => {
     return () => {
