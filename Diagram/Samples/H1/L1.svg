@@ -1,0 +1,69 @@
+<svg width="1000" height="600" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Mẫu icon Ghế Top-down chi tiết -->
+    <g id="chair_icon">
+      <circle cx="0" cy="0" r="14" fill="#333333"/> <!-- Mặt ghế -->
+      <path d="M -15 -5 Q -18 5 -15 15" stroke="#333333" stroke-width="3" fill="none"/> <!-- Tay vịn trái -->
+      <path d="M 15 -5 Q 18 5 15 15" stroke="#333333" stroke-width="3" fill="none"/> <!-- Tay vịn phải -->
+      <rect x="-12" y="12" width="24" height="6" rx="3" fill="#333333"/> <!-- Tựa lưng -->
+    </g>
+    <!-- Mẫu icon Cây (tán lá) -->
+    <g id="plant_icon">
+      <path d="M 0 -10 L 3 -3 L 10 -3 L 4 2 L 7 10 L 0 5 L -7 10 L -4 2 L -10 -3 L -3 -3 Z" fill="#228B22" />
+    </g>
+  </defs>
+
+  <rect width="1000" height="600" fill="#ffffff" />
+  
+  <!-- Tường (Xám đậm) -->
+  <rect x="30" y="30" width="940" height="540" fill="none" stroke="#555555" stroke-width="5" />
+  <line x1="300" y1="30" x2="300" y2="570" stroke="#555555" stroke-width="3" />
+  <line x1="30" y1="300" x2="300" y2="300" stroke="#555555" stroke-width="3" />
+
+  <!-- PHÒNG HỌP (TRÊN TRÁI) -->
+  <g id="meeting_room" transform="translate(60, 60)" cursor="pointer">
+    <rect width="210" height="210" fill="white" opacity="0" />
+    <rect x="50" y="30" width="110" height="150" rx="20" fill="#D3D3D3" stroke="#999999"/>
+    <use href="#chair_icon" x="35" y="60" transform="rotate(-90, 35, 60)"/>
+    <use href="#chair_icon" x="35" y="105" transform="rotate(-90, 35, 105)"/>
+    <use href="#chair_icon" x="35" y="150" transform="rotate(-90, 35, 150)"/>
+    <use href="#chair_icon" x="175" y="60" transform="rotate(90, 175, 60)"/>
+    <use href="#chair_icon" x="175" y="105" transform="rotate(90, 175, 105)"/>
+    <use href="#chair_icon" x="175" y="150" transform="rotate(90, 175, 150)"/>
+  </g>
+
+  <!-- PHÒNG SẾP (DƯỚI TRÁI) -->
+  <g id="room_1_01" transform="translate(60, 330)" cursor="pointer">
+    <path d="M 40 40 L 180 40 L 180 140 L 140 140 L 140 80 L 40 80 Z" fill="#A0522D" />
+    <use href="#chair_icon" x="110" y="110" />
+  </g>
+
+  <!-- CỤM BÀN ĐÔI NHÂN VIÊN (GIỮA) -->
+  <g transform="translate(400, 100)">
+    <!-- Cụm 1 -->
+    <g id="desk_1_01" cursor="pointer">
+      <rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/>
+      <use href="#chair_icon" x="60" y="100" />
+      <text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">1.01</text>
+    </g>
+    <g id="desk_1_02" transform="translate(150, 0)" cursor="pointer">
+      <rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/>
+      <use href="#chair_icon" x="60" y="100" />
+      <text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">1.02</text>
+    </g>
+    <g id="desk_1_03" transform="translate(300, 0)" cursor="pointer">
+      <rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/>
+      <use href="#chair_icon" x="60" y="100" />
+      <text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">1.03</text>
+    </g>
+
+    <g transform="translate(0, 180)">
+      <g id="desk_1_04" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">1.04</text></g>
+      <g id="desk_1_05" transform="translate(150, 0)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">1.05</text></g>
+      <g id="desk_1_06" transform="translate(300, 0)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">1.06</text></g>
+    </g>
+  </g>
+
+  <!-- CÂY XANH (TÁN LÁ) -->
+  <use href="#plant_icon" x="50" y="50" transform="scale(1.5)"/><use href="#plant_icon" x="930" y="50" transform="scale(1.5)"/>
+</svg>

@@ -98,6 +98,8 @@ interface WorkspacePanelProps {
   workspaces: Workspace[]
   floors: Floor[]
   buildings: Building[]
+  users: UserRecord[]
+  currentUserId: string | null
   onRefresh: () => Promise<void>
   apiBaseUrl: string
   token: string
@@ -127,6 +129,7 @@ export default function AdminSetupPage() {
   const { toast } = useToast()
   const apiBaseUrl = React.useMemo(() => getBrowserApiBaseUrl(), [])
   const [session, setSession] = React.useState<Session | null>(null)
+  const [currentUserId, setCurrentUserId] = React.useState<string | null>(null)
   const [userRole, setUserRole] = React.useState<string | null>(null)
   const [activeModule, setActiveModule] = React.useState<ConsoleModule>("space-setup")
   const [activeTab, setActiveTab] = React.useState<Tab>("buildings")
@@ -197,6 +200,7 @@ export default function AdminSetupPage() {
         return
       }
       setSession(currentSession)
+      setCurrentUserId(currentSession.user.id)
       const meRes = await fetch(`${apiBaseUrl}/me`, {
         headers: { Authorization: `Bearer ${currentSession.access_token}` }
       })
@@ -214,8 +218,7 @@ export default function AdminSetupPage() {
             loadUsers(currentSession.access_token),
           ])
         } else if (role === "space_owner") {
-          router.push("/dashboard")
-          return
+          setActiveTab("svg-mapping")
         }
       }
       await loadData(currentSession.access_token ?? "")
@@ -279,6 +282,7 @@ export default function AdminSetupPage() {
         workspaces={workspaces}
         ownerRequests={ownerRequests}
         users={users}
+        currentUserId={currentUserId}
         activeModule={activeModule}
         activeTab={activeTab}
         apiBaseUrl={apiBaseUrl}
@@ -308,6 +312,7 @@ interface SystemConsolePageProps {
   workspaces: Workspace[]
   ownerRequests: OwnerRequest[]
   users: UserRecord[]
+  currentUserId: string | null
   activeModule: ConsoleModule
   activeTab: Tab
   apiBaseUrl: string
@@ -328,6 +333,7 @@ function SystemConsolePage({
   workspaces,
   ownerRequests,
   users,
+  currentUserId,
   activeModule,
   activeTab,
   apiBaseUrl,
@@ -358,6 +364,7 @@ function SystemConsolePage({
       <ModuleNav
         activeModule={activeModule}
         pendingCount={pendingSpaces.length + pendingOwnerRequests.length}
+        userRole={userRole}
         onSelectModule={onSelectModule}
       />
 
@@ -375,6 +382,8 @@ function SystemConsolePage({
               buildings={buildings}
               floors={floors}
               workspaces={workspaces}
+              users={users}
+              currentUserId={currentUserId}
               apiBaseUrl={apiBaseUrl}
               token={token}
               userRole={userRole}
@@ -452,18 +461,27 @@ function StatsCards({
 function ModuleNav({
   activeModule,
   pendingCount,
+  userRole,
   onSelectModule,
 }: {
   activeModule: ConsoleModule
   pendingCount: number
+  userRole: string | null
   onSelectModule: (module: ConsoleModule) => void
 }) {
-  const modules: Array<{ key: ConsoleModule; label: string; icon: React.ElementType; badge?: number }> = [
-    { key: "space-setup", label: "Space Setup", icon: Building2 },
-    { key: "approvals", label: "Approvals", icon: ShieldCheck, badge: pendingCount },
-    { key: "users", label: "User Management", icon: UserCog },
-    { key: "tools", label: "System Tools", icon: Settings },
-  ]
+  const isAdmin = userRole === "admin"
+  const modules = [
+    { key: "space-setup", label: isAdmin ? "Space Setup" : "My Spaces", icon: Building2, show: true },
+    { key: "approvals", label: "Approvals", icon: ShieldCheck, badge: pendingCount, show: isAdmin },
+    { key: "users", label: "User Management", icon: UserCog, show: isAdmin },
+    { key: "tools", label: "System Tools", icon: Settings, show: isAdmin },
+  ].filter((item) => item.show) as Array<{
+    key: ConsoleModule
+    label: string
+    icon: React.ElementType
+    badge?: number
+    show: boolean
+  }>
 
   return (
     <ConsoleCard className="p-2">
@@ -505,6 +523,8 @@ function SpaceSetupModule({
   buildings,
   floors,
   workspaces,
+  users,
+  currentUserId,
   apiBaseUrl,
   token,
   userRole,
@@ -515,6 +535,8 @@ function SpaceSetupModule({
   buildings: Building[]
   floors: Floor[]
   workspaces: Workspace[]
+  users: UserRecord[]
+  currentUserId: string | null
   apiBaseUrl: string
   token: string
   userRole: string | null
@@ -522,28 +544,50 @@ function SpaceSetupModule({
   onRefresh: () => Promise<void>
 }) {
   const { t } = useLanguage()
+  const isAdmin = userRole === "admin"
+  const allowedTabs: Tab[] = isAdmin
+    ? ["buildings", "floors", "svg-mapping", "workspaces"]
+    : ["svg-mapping", "workspaces"]
+  const effectiveActiveTab = allowedTabs.includes(activeTab)
+    ? activeTab
+    : allowedTabs[0]
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white">Space Setup</h1>
-          <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">Manage buildings, floors, SVG maps and bookable workspaces.</p>
+          <h1 className="text-3xl font-black tracking-tight text-slate-950 dark:text-white">{isAdmin ? "Space Setup" : "My Spaces"}</h1>
+          <p className="mt-2 text-sm font-semibold text-slate-600 dark:text-slate-300">
+            {isAdmin
+              ? "Manage buildings, floors, SVG maps and bookable workspaces."
+              : "Upload floor maps, copy SVG element IDs, and propose workspaces for approval."}
+          </p>
         </div>
-        <Button className="h-12 rounded-2xl bg-blue-600 px-6 font-black hover:bg-blue-700" onClick={() => onSelectTab("buildings")}>
-          <Plus size={17} className="mr-2" />
-          Create Building
-        </Button>
+        {isAdmin ? (
+          <Button className="h-12 rounded-2xl bg-blue-600 px-6 font-black hover:bg-blue-700" onClick={() => onSelectTab("buildings")}>
+            <Plus size={17} className="mr-2" />
+            Create Building
+          </Button>
+        ) : (
+          <Button className="h-12 rounded-2xl bg-blue-600 px-6 font-black hover:bg-blue-700" onClick={() => onSelectTab("workspaces")}>
+            <Plus size={17} className="mr-2" />
+            New Workspace
+          </Button>
+        )}
       </div>
 
-      <SetupGuide buildings={buildings} floors={floors} workspaces={workspaces} activeTab={activeTab} onSelectTab={onSelectTab} compact />
+      <SetupGuide buildings={buildings} floors={floors} workspaces={workspaces} activeTab={effectiveActiveTab} onSelectTab={onSelectTab} compact />
 
       <ConsoleCard className="overflow-hidden">
         <div className="flex gap-2 overflow-x-auto border-b border-slate-200 p-4 dark:border-white/10">
-          <TabButton active={activeTab === "buildings"} onClick={() => onSelectTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />
-          <TabButton active={activeTab === "floors"} onClick={() => onSelectTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />
-          <TabButton active={activeTab === "svg-mapping"} onClick={() => onSelectTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />
-          <TabButton active={activeTab === "workspaces"} onClick={() => onSelectTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
+          {isAdmin ? (
+            <>
+              <TabButton active={effectiveActiveTab === "buildings"} onClick={() => onSelectTab("buildings")} icon={<Building2 size={16} />} label={t("admin.tabs.buildings")} />
+              <TabButton active={effectiveActiveTab === "floors"} onClick={() => onSelectTab("floors")} icon={<Layers size={16} />} label={t("admin.tabs.floors")} />
+            </>
+          ) : null}
+          <TabButton active={effectiveActiveTab === "svg-mapping"} onClick={() => onSelectTab("svg-mapping")} icon={<Upload size={16} />} label={t("admin.tabs.svgMapping")} />
+          <TabButton active={effectiveActiveTab === "workspaces"} onClick={() => onSelectTab("workspaces")} icon={<MapPin size={16} />} label={t("admin.tabs.workspaces")} />
         </div>
         <div className="p-5 sm:p-6">
           <AnimatePresence mode="wait">
@@ -554,10 +598,10 @@ function SpaceSetupModule({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
             >
-              {activeTab === "buildings" ? <BuildingPanel buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
-              {activeTab === "floors" ? <FloorPanel floors={floors} buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
-              {activeTab === "workspaces" ? <WorkspacePanel workspaces={workspaces} floors={floors} buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} userRole={userRole} /> : null}
-              {activeTab === "svg-mapping" ? <SvgMapper floors={floors} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+              {effectiveActiveTab === "buildings" && isAdmin ? <BuildingPanel buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+              {effectiveActiveTab === "floors" && isAdmin ? <FloorPanel floors={floors} buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+              {effectiveActiveTab === "workspaces" ? <WorkspacePanel workspaces={workspaces} floors={floors} buildings={buildings} users={users} currentUserId={currentUserId} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} userRole={userRole} /> : null}
+              {effectiveActiveTab === "svg-mapping" ? <SvgMapper floors={floors} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1287,13 +1331,14 @@ function FloorPanel({ floors, buildings, onRefresh, apiBaseUrl, token }: FloorPa
   )
 }
 
-function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, token, userRole }: WorkspacePanelProps) {
+function WorkspacePanel({ workspaces, floors, buildings, users, currentUserId, onRefresh, apiBaseUrl, token, userRole }: WorkspacePanelProps) {
   const { t } = useLanguage()
   const router = useRouter()
   const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
   const [submitted, setSubmitted] = React.useState(false)
   const [lastCreated, setLastCreated] = React.useState<{ name: string; floorId: string } | null>(null)
+  const [editingWorkspaceId, setEditingWorkspaceId] = React.useState<string | null>(null)
   const [form, setForm] = React.useState({
     floorId: floors[0]?.id ?? "",
     name: "",
@@ -1306,6 +1351,11 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
   const effectiveFloorId = form.floorId || floors[0]?.id || ""
   const isValid = Boolean(effectiveFloorId) && Boolean(form.name.trim()) && Boolean(form.svgElementId.trim()) && Boolean(form.qrCodeValue.trim()) && Number.isFinite(form.capacity) && form.capacity > 0
   const isAdmin = userRole === "admin"
+  const visibleWorkspaces = React.useMemo(() => {
+    if (isAdmin) return workspaces
+    return workspaces.filter((workspace) => workspace.owner_id === currentUserId)
+  }, [currentUserId, isAdmin, workspaces])
+  const userById = React.useMemo(() => new Map(users.map((user) => [user.id, user])), [users])
 
   const describeFloor = React.useCallback((floor: Floor) => {
     const building = buildings.find((item) => item.id === floor.building_id)
@@ -1314,17 +1364,46 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
     return building ? `${building.name} / ${floorName}` : floorName
   }, [buildings, t])
 
-  const handleCreate = async () => {
+  const handleEdit = (workspace: Workspace) => {
+    setEditingWorkspaceId(workspace.id)
+    setLastCreated(null)
+    setSubmitted(false)
+    setForm({
+      floorId: workspace.floor_id,
+      name: workspace.name,
+      type: workspace.type,
+      status: workspace.status,
+      svgElementId: workspace.svg_element_id,
+      qrCodeValue: "",
+      capacity: workspace.capacity,
+    })
+  }
+
+  const clearEditing = () => {
+    setEditingWorkspaceId(null)
+    setSubmitted(false)
+    setForm((current) => ({
+      ...current,
+      name: "",
+      svgElementId: "",
+      qrCodeValue: "",
+      capacity: 1,
+    }))
+  }
+
+  const handleSave = async () => {
     if (!token || !effectiveFloorId) return
     setSubmitted(true)
-    if (!isValid) {
+    const isUpdate = Boolean(editingWorkspaceId)
+    const updateValid = Boolean(effectiveFloorId) && Boolean(form.name.trim()) && Boolean(form.svgElementId.trim()) && Number.isFinite(form.capacity) && form.capacity > 0
+    if (isUpdate ? !updateValid : !isValid) {
       toast({ title: tFallback(t, "admin.validationTitle", "Check the form"), description: tFallback(t, "admin.fixValidation", "Some required information is missing or invalid."), variant: "error" })
       return
     }
     setIsSaving(true)
     try {
-      const res = await fetch(`${apiBaseUrl}/workspaces`, {
-        method: "POST",
+      const res = await fetch(editingWorkspaceId ? `${apiBaseUrl}/workspaces/${editingWorkspaceId}` : `${apiBaseUrl}/workspaces`, {
+        method: editingWorkspaceId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           floorId: effectiveFloorId,
@@ -1332,7 +1411,7 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
           type: form.type,
           status: form.status,
           svgElementId: form.svgElementId,
-          qrCodeValue: form.qrCodeValue,
+          ...(editingWorkspaceId ? {} : { qrCodeValue: form.qrCodeValue }),
           capacity: form.capacity,
         }),
       })
@@ -1342,6 +1421,7 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
         const createdFloorId = effectiveFloorId
         await onRefresh()
         setSubmitted(false)
+        setEditingWorkspaceId(null)
         setLastCreated({ name: createdName, floorId: createdFloorId })
         setForm((current) => ({
           ...current,
@@ -1403,7 +1483,7 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
   return (
     <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
       <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
-        {workspaces.map((w: Workspace) => (
+        {visibleWorkspaces.map((w: Workspace) => (
           <Card key={w.id} className={cn("group relative overflow-hidden transition-all hover:border-blue-300", adminCardClass)}>
              <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
                 <MapPin size={80} />
@@ -1416,12 +1496,17 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
                    <div>
                       <h4 className="text-lg font-black text-slate-950 dark:text-white">{w.name}</h4>
                       <p className="text-xs font-semibold text-slate-500">{w.type.toUpperCase()} • {t("admin.capacity")}: {w.capacity}</p>
+                      {isAdmin && (
+                        <p className="mt-1 text-[11px] font-bold text-slate-500">
+                          Owner: {w.owner_id ? (userById.get(w.owner_id)?.email ?? w.owner_id) : "Admin/System"}
+                        </p>
+                      )}
                       <p className="mt-1 text-[10px] font-black uppercase tracking-widest text-blue-600 dark:text-blue-300">{w.approval_status ?? "approved"}</p>
                    </div>
                 </div>
                 <div className="flex items-center justify-between mt-6">
                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{t("admin.svgId")}: {w.svg_element_id}</span>
-                   <Button variant="ghost" size="sm" className="text-primary-500 font-bold hover:bg-primary-500/10">{t("admin.edit")}</Button>
+                   <Button variant="ghost" size="sm" className="text-primary-500 font-bold hover:bg-primary-500/10" onClick={() => handleEdit(w)}>{t("admin.edit")}</Button>
                 </div>
                 {isAdmin && w.approval_status === "pending_approval" && (
                   <div className="mt-4 grid grid-cols-2 gap-2">
@@ -1436,14 +1521,28 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
              </CardContent>
           </Card>
         ))}
+        {!visibleWorkspaces.length && (
+          <div className="rounded-2xl border border-dashed border-slate-200 bg-white p-8 text-center text-sm font-bold text-slate-500 dark:border-white/10 dark:bg-slate-900">
+            {isAdmin ? "No workspaces have been created yet." : "You have not created any workspaces yet."}
+          </div>
+        )}
       </div>
 
       <Card className={cn("h-fit lg:sticky lg:top-8", adminCardClass)}>
         <CardHeader>
-          <CardTitle>{t("admin.newWorkspace")}</CardTitle>
-          <CardDescription>{t("admin.levelManagementDesc")}</CardDescription>
+          <CardTitle>{editingWorkspaceId ? tFallback(t, "admin.editWorkspace", "Edit Workspace") : t("admin.newWorkspace")}</CardTitle>
+          <CardDescription>
+            {editingWorkspaceId
+              ? tFallback(t, "admin.editWorkspaceDesc", "Update workspace metadata for the selected space.")
+              : t("admin.levelManagementDesc")}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {editingWorkspaceId && (
+            <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 text-sm font-semibold text-blue-700 dark:border-blue-500/20 dark:bg-blue-500/10 dark:text-blue-200">
+              Editing an existing workspace. QR code value is kept unchanged.
+            </div>
+          )}
           {lastCreated && (
             <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/10 p-4">
               <div className="flex items-start gap-3">
@@ -1503,8 +1602,8 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
           </div>
           <div className="space-y-2">
             <label className={adminLabelClass}>{t("admin.qrCodeValue")}</label>
-            <Input placeholder={t("admin.qrCodePlaceholder")} className={adminInputClass} value={form.qrCodeValue} onChange={(e) => setForm({ ...form, qrCodeValue: e.target.value })} />
-            <FieldError show={submitted && !form.qrCodeValue.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
+            <Input placeholder={editingWorkspaceId ? "Existing QR value is preserved" : t("admin.qrCodePlaceholder")} className={adminInputClass} value={form.qrCodeValue} onChange={(e) => setForm({ ...form, qrCodeValue: e.target.value })} disabled={Boolean(editingWorkspaceId)} />
+            <FieldError show={submitted && !editingWorkspaceId && !form.qrCodeValue.trim()}>{tFallback(t, "admin.validation.required", "This field is required.")}</FieldError>
           </div>
           <div className="space-y-2">
             <label className={adminLabelClass}>{t("admin.capacity")}</label>
@@ -1513,13 +1612,18 @@ function WorkspacePanel({ workspaces, floors, buildings, onRefresh, apiBaseUrl, 
           </div>
           <Button
             className="w-full bg-primary-600 hover:bg-primary-700 h-12 font-black"
-            onClick={handleCreate}
+            onClick={handleSave}
             disabled={!effectiveFloorId}
             isLoading={isSaving}
             loadingText={t("admin.saving")}
           >
-            <Plus className="mr-2" size={18} /> {t("admin.createWorkspace")}
+            <Plus className="mr-2" size={18} /> {editingWorkspaceId ? tFallback(t, "admin.saveWorkspace", "Save Workspace") : t("admin.createWorkspace")}
           </Button>
+          {editingWorkspaceId && (
+            <Button variant="outline" className="w-full h-11 font-black" onClick={clearEditing} disabled={isSaving}>
+              Cancel Edit
+            </Button>
+          )}
         </CardContent>
       </Card>
     </div>

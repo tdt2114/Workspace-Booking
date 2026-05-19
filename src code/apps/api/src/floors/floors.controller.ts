@@ -14,6 +14,8 @@ import {
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiBearerAuth, ApiBody, ApiConsumes, ApiTags } from '@nestjs/swagger';
+import type { AuthenticatedUser } from '../auth/auth.types';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { SupabaseAuthGuard } from '../auth/supabase-auth.guard';
@@ -65,7 +67,7 @@ export class FloorsController {
 
   @Post(':id/svg')
   @UseGuards(RolesGuard)
-  @Roles('admin')
+  @Roles('admin', 'space_owner')
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -83,6 +85,7 @@ export class FloorsController {
   @UseInterceptors(FileInterceptor('file'))
   uploadSvgMap(
     @Param('id', new ParseUUIDPipe()) id: string,
+    @CurrentUser() user: AuthenticatedUser,
     @UploadedFile()
     file: {
       originalname: string;
@@ -91,6 +94,6 @@ export class FloorsController {
       size: number;
     },
   ) {
-    return this.floorsService.uploadSvgMap(id, file);
+    return this.floorsService.uploadSvgMap(id, user, file);
   }
 }

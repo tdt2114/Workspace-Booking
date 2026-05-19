@@ -1,0 +1,80 @@
+<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="600" fill="#fcfcfc" />
+  <rect width="780" height="580" x="10" y="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" rx="20" />
+
+  <path d="M 10 150 L 800 150" stroke="#f1f5f9" stroke-width="40" fill="none" opacity="0.5"/>
+  <text x="30" y="40" font-family="Arial" font-size="24" font-weight="900" fill="#1e293b">PREMIUM OFFICE - TẦNG 1</text>
+
+  <!-- CỤM BÀN LÀM VIỆC (8 BÀN) -->
+  <g transform="translate(50, 200)">
+    <g id="desk_1_01" cursor="pointer">
+      <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+      <rect x="25" y="5" width="30" height="20" rx="2" fill="#94a3b8" opacity="0.3" />
+      <circle cx="40" cy="65" r="15" fill="#e2e8f0" />
+      <text x="25" y="35" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 01</text>
+    </g>
+    <g id="desk_1_02" transform="translate(100, 0)" cursor="pointer">
+      <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+      <rect x="25" y="5" width="30" height="20" rx="2" fill="#94a3b8" opacity="0.3" />
+      <circle cx="40" cy="65" r="15" fill="#e2e8f0" />
+      <text x="25" y="35" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 02</text>
+    </g>
+    <g id="desk_1_03" transform="translate(200, 0)" cursor="pointer">
+      <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+      <rect x="25" y="5" width="30" height="20" rx="2" fill="#94a3b8" opacity="0.3" />
+      <circle cx="40" cy="65" r="15" fill="#e2e8f0" />
+      <text x="25" y="35" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 03</text>
+    </g>
+    <g id="desk_1_04" transform="translate(300, 0)" cursor="pointer">
+      <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+      <rect x="25" y="5" width="30" height="20" rx="2" fill="#94a3b8" opacity="0.3" />
+      <circle cx="40" cy="65" r="15" fill="#e2e8f0" />
+      <text x="25" y="35" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 04</text>
+    </g>
+    <g transform="translate(0, 100)">
+        <g id="desk_1_05" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="15" fill="#e2e8f0" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 05</text>
+        </g>
+        <g id="desk_1_06" transform="translate(100, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="15" fill="#e2e8f0" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 06</text>
+        </g>
+        <g id="desk_1_07" transform="translate(200, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="15" fill="#e2e8f0" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 07</text>
+        </g>
+        <g id="desk_1_08" transform="translate(300, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="15" fill="#e2e8f0" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">DESK 08</text>
+        </g>
+    </g>
+  </g>
+
+  <!-- PHÒNG HỌP VIP -->
+  <g id="meeting_room_01" transform="translate(480, 200)" cursor="pointer">
+    <rect width="250" height="250" rx="12" fill="#3b82f6" opacity="0.05" stroke="#3b82f6" stroke-width="3" stroke-dasharray="8 4"/>
+    <rect x="50" y="60" width="150" height="130" rx="65" fill="#ffffff" stroke="#3b82f6" stroke-width="2" filter="url(#shadow)"/>
+    <circle cx="125" cy="45" r="12" fill="#cbd5e1" />
+    <circle cx="125" cy="205" r="12" fill="#cbd5e1" />
+    <circle cx="35" cy="125" r="12" fill="#cbd5e1" />
+    <circle cx="215" cy="125" r="12" fill="#cbd5e1" />
+    <text x="80" y="130" font-family="Arial" font-size="14" font-weight="900" fill="#1e40af">VIP ROOM 01</text>
+  </g>
+
+  <g transform="translate(680, 50)">
+    <circle cx="20" cy="20" r="15" fill="#22c55e" opacity="0.4" />
+    <circle cx="15" cy="15" r="8" fill="#16a34a" opacity="0.6" />
+    <text x="45" y="25" font-family="Arial" font-size="12" fill="#64748b" font-style="italic">Green Zone</text>
+  </g>
+</svg>

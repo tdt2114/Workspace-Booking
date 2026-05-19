@@ -1,0 +1,57 @@
+<svg width="1000" height="600" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <g id="chair_icon">
+      <circle cx="0" cy="0" r="14" fill="#333333"/>
+      <path d="M -15 -5 Q -18 5 -15 15" stroke="#333333" stroke-width="3" fill="none"/>
+      <path d="M 15 -5 Q 18 5 15 15" stroke="#333333" stroke-width="3" fill="none"/>
+      <rect x="-12" y="12" width="24" height="6" rx="3" fill="#333333"/>
+    </g>
+    <g id="plant_icon">
+      <path d="M 0 -10 L 3 -3 L 10 -3 L 4 2 L 7 10 L 0 5 L -7 10 L -4 2 L -10 -3 L -3 -3 Z" fill="#228B22" />
+    </g>
+  </defs>
+
+  <rect width="1000" height="600" fill="#ffffff" />
+  <rect x="30" y="30" width="940" height="540" fill="none" stroke="#555555" stroke-width="5" />
+  
+  <!-- PHÒNG HỌP ĐÔI (BÊN PHẢI) -->
+  <g id="meeting_2_01" transform="translate(600, 60)" cursor="pointer">
+    <rect width="320" height="230" rx="10" fill="#f8f9fa" stroke="#555555" stroke-width="2"/>
+    <ellipse cx="160" cy="115" rx="110" ry="60" fill="#D3D3D3" stroke="#999999"/>
+    <use href="#chair_icon" x="160" y="40" transform="rotate(180, 160, 40)"/>
+    <use href="#chair_icon" x="160" y="190"/>
+  </g>
+
+  <g id="meeting_2_02" transform="translate(600, 310)" cursor="pointer">
+    <rect width="320" height="230" rx="10" fill="#f8f9fa" stroke="#555555" stroke-width="2"/>
+    <ellipse cx="160" cy="115" rx="110" ry="60" fill="#D3D3D3" stroke="#999999"/>
+    <use href="#chair_icon" x="160" y="40" transform="rotate(180, 160, 40)"/>
+    <use href="#chair_icon" x="160" y="190"/>
+  </g>
+
+  <!-- 6 BÀN NHÂN VIÊN (BÊN TRÁI) -->
+  <g transform="translate(100, 150)">
+    <g id="desk_2_01" cursor="pointer">
+      <rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/>
+      <use href="#chair_icon" x="60" y="100" />
+      <text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">2.01</text>
+    </g>
+    <g id="desk_2_02" transform="translate(140, 0)" cursor="pointer">
+      <rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/>
+      <use href="#chair_icon" x="60" y="100" />
+      <text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">2.02</text>
+    </g>
+    <g id="desk_2_03" transform="translate(280, 0)" cursor="pointer">
+      <rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/>
+      <use href="#chair_icon" x="60" y="100" />
+      <text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">2.03</text>
+    </g>
+    <g transform="translate(0, 180)">
+      <g id="desk_2_04" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">2.04</text></g>
+      <g id="desk_2_05" transform="translate(140, 0)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">2.05</text></g>
+      <g id="desk_2_06" transform="translate(280, 0)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">2.06</text></g>
+    </g>
+  </g>
+
+  <use href="#plant_icon" x="50" y="50" transform="scale(1.5)"/><use href="#plant_icon" x="50" y="540" transform="scale(1.5)"/>
+</svg>

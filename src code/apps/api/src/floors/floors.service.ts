@@ -4,6 +4,7 @@ import {
   InternalServerErrorException,
   NotFoundException,
 } from '@nestjs/common';
+import type { AuthenticatedUser } from '../auth/auth.types';
 import { getSupabaseAdmin } from '../common/supabase.client';
 import { CreateFloorDto } from './dto/create-floor.dto';
 import { UpdateFloorDto } from './dto/update-floor.dto';
@@ -132,6 +133,7 @@ export class FloorsService {
 
   async uploadSvgMap(
     id: string,
+    user: AuthenticatedUser,
     file: {
       originalname: string;
       mimetype: string;
@@ -149,7 +151,9 @@ export class FloorsService {
 
     const supabaseAdmin = getSupabaseAdmin();
     const fileName = this.normalizeFileName(file.originalname);
-    const objectPath = `floors/${id}/${Date.now()}-${fileName}`;
+    const ownerSegment =
+      user.role === 'space_owner' ? `space-owners/${user.id}` : 'admin';
+    const objectPath = `floors/${id}/${ownerSegment}/${Date.now()}-${fileName}`;
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from(FLOOR_MAPS_BUCKET)

@@ -1,0 +1,42 @@
+<svg width="1000" height="600" viewBox="0 0 1000 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <g id="chair_icon">
+      <circle cx="0" cy="0" r="14" fill="#333333"/>
+      <path d="M -15 -5 Q -18 5 -15 15" stroke="#333333" stroke-width="3" fill="none"/>
+      <path d="M 15 -5 Q 18 5 15 15" stroke="#333333" stroke-width="3" fill="none"/>
+      <rect x="-12" y="12" width="24" height="6" rx="3" fill="#333333"/>
+    </g>
+    <g id="plant_icon">
+      <path d="M 0 -10 L 3 -3 L 10 -3 L 4 2 L 7 10 L 0 5 L -7 10 L -4 2 L -10 -3 L -3 -3 Z" fill="#228B22" />
+    </g>
+  </defs>
+
+  <rect width="1000" height="600" fill="#ffffff" />
+  <rect x="30" y="30" width="940" height="540" fill="none" stroke="#555555" stroke-width="5" />
+
+  <!-- 1 LARGE BOARDROOM (BÊN PHẢI) -->
+  <g id="boardroom_3_01" transform="translate(500, 80)" cursor="pointer">
+    <rect width="440" height="440" rx="20" fill="#f8f9fa" stroke="#555555" stroke-width="2"/>
+    <rect x="70" y="70" width="300" height="300" rx="150" fill="#D3D3D3" stroke="#999999"/>
+    <text x="140" y="230" font-family="Arial" font-size="20" font-weight="900" fill="#5D4037">BOARDROOM</text>
+    <!-- Ghế xung quanh -->
+    <use href="#chair_icon" x="220" y="50" transform="rotate(180, 220, 50)"/>
+    <use href="#chair_icon" x="220" y="390"/>
+    <use href="#chair_icon" x="50" y="220" transform="rotate(-90, 50, 220)"/>
+    <use href="#chair_icon" x="390" y="220" transform="rotate(90, 390, 220)"/>
+  </g>
+
+  <!-- 8 BÀN NHÂN VIÊN (BÊN TRÁI) -->
+  <g transform="translate(80, 80)">
+    <g id="desk_3_01" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">3.01</text></g>
+    <g id="desk_3_02" transform="translate(140, 0)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">3.02</text></g>
+    <g id="desk_3_03" transform="translate(0, 130)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">3.03</text></g>
+    <g id="desk_3_04" transform="translate(140, 130)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="white">3.04</text></g>
+    <g id="desk_3_05" transform="translate(0, 260)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="#white">3.05</text></g>
+    <g id="desk_3_06" transform="translate(140, 260)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="#white">3.06</text></g>
+    <g id="desk_3_07" transform="translate(0, 390)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="#white">3.07</text></g>
+    <g id="desk_3_08" transform="translate(140, 390)" cursor="pointer"><rect width="120" height="70" fill="#DEB887" stroke="#C19A6B"/><use href="#chair_icon" x="60" y="100" /><text x="45" y="40" font-family="Arial" font-size="12" font-weight="bold" fill="#white">3.08</text></g>
+  </g>
+
+  <use href="#plant_icon" x="50" y="50" transform="scale(1.5)"/><use href="#plant_icon" x="930" y="540" transform="scale(1.5)"/>
+</svg>

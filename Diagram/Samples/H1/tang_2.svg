@@ -1,0 +1,81 @@
+<svg width="800" height="600" viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.1"/>
+    </filter>
+  </defs>
+
+  <rect width="800" height="600" fill="#fcfcfc" />
+  <rect width="780" height="580" x="10" y="10" fill="#ffffff" stroke="#e2e8f0" stroke-width="1" rx="20" />
+
+  <path d="M 10 150 L 800 150" stroke="#f1f5f9" stroke-width="40" fill="none" opacity="0.5"/>
+  <text x="30" y="40" font-family="Arial" font-size="24" font-weight="900" fill="#1e293b">PREMIUM OFFICE - TẦNG 2</text>
+
+  <!-- CỤM BÀN LÀM VIỆC (DÃY DÀI 10 BÀN) -->
+  <g transform="translate(50, 200)">
+    <!-- Hàng trên 5 bàn -->
+    <g transform="translate(0, 0)">
+        <g id="desk_2_01" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="65" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-01</text>
+        </g>
+        <g id="desk_2_02" transform="translate(100, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="65" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-02</text>
+        </g>
+        <g id="desk_2_03" transform="translate(200, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="65" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-03</text>
+        </g>
+        <g id="desk_2_04" transform="translate(300, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="65" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-04</text>
+        </g>
+        <g id="desk_2_05" transform="translate(400, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="65" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-05</text>
+        </g>
+    </g>
+
+    <!-- Hàng dưới 5 bàn -->
+    <g transform="translate(0, 150)">
+        <g id="desk_2_06" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-06</text>
+        </g>
+        <g id="desk_2_07" transform="translate(100, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-07</text>
+        </g>
+        <g id="desk_2_08" transform="translate(200, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-08</text>
+        </g>
+        <g id="desk_2_09" transform="translate(300, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-09</text>
+        </g>
+        <g id="desk_2_10" transform="translate(400, 0)" cursor="pointer">
+          <rect width="80" height="50" rx="4" fill="#10b981" opacity="0.1" stroke="#10b981" stroke-width="2" filter="url(#shadow)"/>
+          <circle cx="40" cy="-15" r="12" fill="#cbd5e1" />
+          <text x="25" y="30" font-family="Arial" font-size="10" fill="#065f46" font-weight="bold">D2-10</text>
+        </g>
+    </g>
+  </g>
+
+  <!-- Khu vực Pantry/Cafe (Trang trí) -->
+  <g transform="translate(600, 200)">
+    <rect width="150" height="200" rx="10" fill="#f1f5f9" stroke="#cbd5e1" />
+    <text x="45" y="100" font-family="Arial" font-size="14" font-weight="bold" fill="#64748b">PANTRY</text>
+    <circle cx="30" cy="30" r="10" fill="#94a3b8" /> <!-- Coffee machine -->
+  </g>
+</svg>
