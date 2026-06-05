@@ -8,10 +8,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev:final": "npm run dev --workspace web-final -- --port 3002",
+    "dev:final": "node -e \"const fs = require('fs'); if (fs.existsSync('.env')) fs.copyFileSync('.env', 'apps/web-final/.env.local')\" && npm run dev --workspace web-final -- --port 3002",
     "dev:api": "npm run start:dev --workspace api",
     "start:final": "npm run start --workspace web-final -- --hostname 0.0.0.0 --port 3002",
-    "build:final": "npm run build --workspace web-final",
+    "build:final": "node -e \"const fs = require('fs'); if (fs.existsSync('.env')) fs.copyFileSync('.env', 'apps/web-final/.env.local')\" && npm run build --workspace web-final",
     "build:api": "npm run build --workspace api",
     "lint:api": "npm run lint --workspace api",
     "test:api": "npm run test --workspace api",
