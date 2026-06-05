@@ -49,10 +49,30 @@ Git là công cụ giúp bạn tải bộ code từ mạng về máy tính và c
 3. **Mở file `.env` vừa tạo bằng ứng dụng Notepad**:
    * Click chuột phải vào file `.env` -> chọn **Open with** -> chọn **Notepad**.
 4. **Điền khóa bí mật (Secret Key) để chạy backend**:
-   * File `.env.example` đã được điền sẵn các thông tin công khai (URL và Publishable key) của dự án. Bạn chỉ cần điền duy nhất khóa bí mật của database.
-   * Để lấy khóa này: Truy cập vào trang quản trị Supabase của bạn -> Chọn mục **Project Settings** (icon bánh răng) -> Chọn **API** ở cột bên trái.
-   * Tại mục **Secret keys**, bấm nút **+ New secret key** ở góc phải -> Đặt tên bất kỳ và bấm tạo -> Copy key dạng `sb_secret_...` vừa tạo được.
-   * Dán key vừa copy vào sau dấu `=` ở **Dòng 8** (`SUPABASE_SERVICE_ROLE_KEY`).
+   * File `.env` sau khi nhân bản đã chứa sẵn các thông tin cấu hình công khai của dự án. Bạn chỉ cần dán khóa bí mật (do chủ dự án cung cấp riêng) vào sau dấu `=` ở **Dòng 8** (`SUPABASE_SERVICE_ROLE_KEY=`).
+   * *Hoặc bạn có thể copy toàn bộ nội dung mẫu dưới đây và đè vào file `.env`:*
+     ```env
+     # Shared / Environment
+     NODE_ENV=development
+
+     # Supabase Configurations
+     NEXT_PUBLIC_SUPABASE_URL=https://tzcksukvryjhknsakbkf.supabase.co
+     NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_nYuDiW9Di2wF4-LmFhSEWQ_H_JNdZnQ
+     SUPABASE_URL=https://tzcksukvryjhknsakbkf.supabase.co
+     SUPABASE_SERVICE_ROLE_KEY=[DÁN_KEY_BÍ_MẬT_DO_CHỦ_DỰ_ÁN_CUNG_CẤP_VÀO_ĐÂY]
+     SUPABASE_JWT_SECRET=
+
+     # API Backend Configuration
+     PORT=3001
+     CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:3002
+     BOOKINGS_LIFECYCLE_ENABLED=false
+     BOOKINGS_LIFECYCLE_INTERVAL_MS=60000
+     BOOKINGS_LIFECYCLE_RUN_ON_START=false
+
+     # Web Frontend (web-final) Configuration
+     NEXT_PUBLIC_API_BASE_URL=/api
+     API_PROXY_TARGET=http://127.0.0.1:3001
+     ```
 5. Nhấn tổ hợp phím **Ctrl + S** để lưu file lại và đóng cửa sổ Notepad.
 
 ---
