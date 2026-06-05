@@ -48,13 +48,11 @@ Git là công cụ giúp bạn tải bộ code từ mạng về máy tính và c
    * Đổi tên file bản sao đó thành đúng **`.env`** (xóa đuôi `.example` đi).
 3. **Mở file `.env` vừa tạo bằng ứng dụng Notepad**:
    * Click chuột phải vào file `.env` -> chọn **Open with** -> chọn **Notepad**.
-4. **Điền thông tin kết nối Supabase của bạn**:
-   * Vào trang quản trị Supabase dự án của bạn -> chọn mục **Project Settings** (icon bánh răng) -> chọn tiếp **API** ở cột bên trái.
-   * Tiến hành copy và điền các giá trị vào file `.env` theo hướng dẫn:
-     * **Dòng 5** (`NEXT_PUBLIC_SUPABASE_URL`): Copy **Project URL** trên Supabase và dán vào sau dấu `=`.
-     * **Dòng 6** (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`): Copy **anon/public key** trên Supabase và dán vào sau dấu `=`.
-     * **Dòng 7** (`SUPABASE_URL`): Dán lại **Project URL** của bạn giống dòng 5.
-     * **Dòng 8** (`SUPABASE_SERVICE_ROLE_KEY`): Trên trang Supabase, tại mục *Secret keys*, bấm nút **+ New secret key** ở góc phải -> Đặt tên bất kỳ và bấm tạo -> Copy key dạng `sb_secret_...` vừa tạo được và dán vào sau dấu `=`. *(Lưu ý: Key này chỉ hiện một lần duy nhất lúc tạo, bạn hãy copy ngay)*.
+4. **Điền khóa bí mật (Secret Key) để chạy backend**:
+   * File `.env.example` đã được điền sẵn các thông tin công khai (URL và Publishable key) của dự án. Bạn chỉ cần điền duy nhất khóa bí mật của database.
+   * Để lấy khóa này: Truy cập vào trang quản trị Supabase của bạn -> Chọn mục **Project Settings** (icon bánh răng) -> Chọn **API** ở cột bên trái.
+   * Tại mục **Secret keys**, bấm nút **+ New secret key** ở góc phải -> Đặt tên bất kỳ và bấm tạo -> Copy key dạng `sb_secret_...` vừa tạo được.
+   * Dán key vừa copy vào sau dấu `=` ở **Dòng 8** (`SUPABASE_SERVICE_ROLE_KEY`).
 5. Nhấn tổ hợp phím **Ctrl + S** để lưu file lại và đóng cửa sổ Notepad.
 
 ---
