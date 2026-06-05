@@ -48,9 +48,17 @@ Git là công cụ giúp bạn tải bộ code từ mạng về máy tính và c
    * Đổi tên file bản sao đó thành đúng **`.env`** (xóa đuôi `.example` đi).
 3. **Mở file `.env` vừa tạo bằng ứng dụng Notepad**:
    * Click chuột phải vào file `.env` -> chọn **Open with** -> chọn **Notepad**.
-4. **Điền khóa bí mật (Secret Key) để chạy backend**:
-   * File `.env` sau khi nhân bản đã chứa sẵn các thông tin cấu hình công khai của dự án. Bạn chỉ cần dán khóa bí mật (do chủ dự án cung cấp riêng) vào sau dấu `=` ở **Dòng 8** (`SUPABASE_SERVICE_ROLE_KEY=`).
-   * *Hoặc bạn có thể copy toàn bộ nội dung mẫu dưới đây và đè vào file `.env`:*
+4. **Điền thông tin cấu hình Supabase**:
+   Hãy sao chép các thông tin dưới đây và dán vào sau dấu `=` của các dòng tương ứng trong file `.env`:
+   * **Dòng 5** (`NEXT_PUBLIC_SUPABASE_URL`): Dán đường dẫn sau:
+     `https://tzcksukvryjhknsakbkf.supabase.co`
+   * **Dòng 6** (`NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`): Dán khóa sau:
+     `sb_publishable_nYuDiW9Di2wF4-LmFhSEWQ_H_JNdZnQ`
+   * **Dòng 7** (`SUPABASE_URL`): Dán đường dẫn sau (giống dòng 5):
+     `https://tzcksukvryjhknsakbkf.supabase.co`
+   * **Dòng 8** (`SUPABASE_SERVICE_ROLE_KEY`): Dán khóa bí mật `service_role` mới của bạn vào (Khóa này lấy từ trang quản trị Supabase -> Project Settings -> API -> Secret keys -> bấm tạo khóa mới và copy).
+
+   *Hoặc bạn có thể copy toàn bộ nội dung mẫu dưới đây và đè vào file `.env`:*
      ```env
      # Shared / Environment
      NODE_ENV=development
