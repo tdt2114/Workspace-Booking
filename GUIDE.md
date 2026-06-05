@@ -38,6 +38,9 @@ Git là công cụ giúp bạn tải bộ code từ mạng về máy tính và c
 ### ➡️ Bước 2: Thiết lập cấu hình (Tạo file `.env`)
 Để dự án của bạn có thể kết nối được với cơ sở dữ liệu Supabase, bạn cần điền các khóa kết nối vào file cấu hình.
 
+> [!TIP]
+> **Lưu ý quan trọng**: Nếu bạn nhận được thư mục dự án này dưới dạng file nén `.zip` từ chủ dự án và thấy trong thư mục **`src code`** đã có sẵn file **`.env`** (chứa sẵn các key kết nối hoạt động), bạn hãy **bỏ qua hoàn toàn Bước 2 này** và chuyển thẳng tới **Bước 3** để chạy dự án luôn!
+
 1. Sử dụng File Explorer (Thư mục máy tính), truy cập vào thư mục code vừa tải về, sau đó vào thư mục con tên là **`src code`**.
 2. Tìm file có tên là **`.env.example`** (đây là file mẫu):
    * Click chuột phải vào file `.env.example` -> chọn **Copy** (Sao chép).
