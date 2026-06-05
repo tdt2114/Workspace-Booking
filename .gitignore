@@ -29,6 +29,4 @@ Thumbs.db
 # Project Specific
 Report/
 plan/
-SETUP.md
-README.md
 code/apps/web/.env.local
