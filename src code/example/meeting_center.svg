@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 600" width="1000" height="600" font-family="Arial, Helvetica, sans-serif">
+  <defs>
+    <style>
+      .wall   { fill: none; stroke: #334155; stroke-width: 4; }
+      .inner-wall { fill: none; stroke: #64748b; stroke-width: 2.5; stroke-dasharray: 4 2; }
+      .desk   { fill: #e0f2fe; stroke: #0284c7; stroke-width: 1.5; cursor: pointer; transition: all 0.2s; }
+      .room   { fill: #f0fdf4; stroke: #16a34a; stroke-width: 1.5; cursor: pointer; transition: all 0.2s; }
+      .common { fill: #fef3c7; stroke: #d97706; stroke-width: 1.5; }
+      .label  { font-size: 11px; fill: #1e293b; text-anchor: middle; font-weight: 500; }
+      .title  { font-size: 24px; fill: #0f172a; font-weight: 800; }
+      .roomlabel { font-size: 12px; fill: #0f172a; text-anchor: middle; font-weight: bold; }
+    </style>
+  </defs>
+  <rect width="1000" height="600" fill="#f8fafc" />
+  <rect class="wall" x="20" y="20" width="960" height="560" rx="12" />
+  <text class="title" x="40" y="60">Training &amp; Conference Center</text>
+  <g id="room-training-1">
+    <rect class="room" id="room_training_1" x="40" y="100" width="430" height="200" rx="8" />
+    <text class="roomlabel" x="255" y="195">Training Hall Alpha</text>
+    <text class="label" x="255" y="215">(Max 30 Seats)</text>
+  </g>
+  <g id="room-training-2">
+    <rect class="room" id="room_training_2" x="510" y="100" width="430" height="200" rx="8" />
+    <text class="roomlabel" x="725" y="195">Training Hall Bravo</text>
+    <text class="label" x="725" y="215">(Max 30 Seats)</text>
+  </g>
+  <g id="hall-main">
+    <rect class="room" id="hall_main" x="40" y="340" width="550" height="220" rx="8" />
+    <text class="roomlabel" x="315" y="445">Main Workshop Arena</text>
+    <text class="label" x="315" y="465">(Interactive Projection, Sound System)</text>
+  </g>
+  <g id="room-workshop">
+    <rect class="room" id="room_workshop" x="620" y="340" width="320" height="120" rx="8" />
+    <text class="roomlabel" x="780" y="405">Collaborative Room C</text>
+  </g>
+  <g>
+    <rect class="common" x="620" y="480" width="320" height="80" rx="8" />
+    <text class="roomlabel" x="780" y="525">Breakout Snack &amp; Coffee Zone</text>
+  </g>
+
+</svg>

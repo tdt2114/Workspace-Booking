@@ -25,6 +25,8 @@ interface Booking {
   status: 'confirmed' | 'checked_in' | 'completed' | 'cancelled' | 'no_show'
   workspace_name?: string
   floor_name?: string
+  floor_id?: string
+  building_id?: string
   user_email?: string
 }
 
@@ -763,6 +765,7 @@ function StatCard({ label, value, icon }: StatCardProps) {
 
 function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemProps) {
   const { locale, t } = useLanguage()
+  const router = useRouter()
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
   const statusConfig: BookingStatusConfig = {
     upcoming: { label: t("bookings.status.upcoming"), className: "bg-blue-50 text-blue-600 border-blue-200 dark:bg-blue-500/10 dark:text-blue-500 dark:border-blue-500/20" },
@@ -775,6 +778,26 @@ function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemPro
 
   const displayStatus = getBookingDisplayStatus(booking, now)
   const cfg = statusConfig[displayStatus]
+
+  const handleNavigateToMap = () => {
+    if (booking.floor_id && booking.workspace_id) {
+      const params = new URLSearchParams()
+      if (booking.building_id) {
+        params.set("buildingId", booking.building_id)
+      }
+      params.set("floorId", booking.floor_id)
+      params.set("workspaceId", booking.workspace_id)
+      if (booking.start_time) {
+        params.set("startTime", booking.start_time)
+      }
+      if (booking.end_time) {
+        params.set("endTime", booking.end_time)
+      }
+      router.push(`/floor-map?${params.toString()}`)
+    } else {
+      router.push("/floor-map")
+    }
+  }
 
   return (
     <div className="group flex flex-col justify-between gap-4 rounded-2xl border border-slate-200 bg-slate-50 p-5 transition-all hover:border-blue-200 hover:bg-white sm:flex-row sm:items-center dark:border-white/10 dark:bg-slate-800 dark:hover:border-primary-500/30">
@@ -813,7 +836,12 @@ function BookingItem({ booking, onCancel, isActionLoading, now }: BookingItemPro
               {t("bookings.cancel")}
             </Button>
           )}
-          <Button variant="ghost" size="icon" className="text-slate-500 hover:text-white h-10 w-10">
+          <Button 
+            variant="ghost" 
+            size="icon" 
+            className="text-slate-500 hover:bg-slate-100 dark:hover:bg-white/5 h-10 w-10 transition-colors"
+            onClick={handleNavigateToMap}
+          >
             <ChevronRight size={20} />
           </Button>
         </div>

@@ -46,6 +46,19 @@ export default function FinalLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (window.location.protocol === 'http:' && 
+                  window.location.hostname !== 'localhost' && 
+                  window.location.hostname !== '127.0.0.1') {
+                window.location.replace(window.location.href.replace('http://', 'https://'));
+              }
+            `
+          }}
+        />
+      </head>
       <body className="antialiased min-h-screen flex flex-col">
         <ThemeProvider>
           <LanguageProvider>

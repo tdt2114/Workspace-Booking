@@ -52,6 +52,7 @@ interface BookingRecord {
   status: string
   user_email?: string | null
   user_full_name?: string | null
+  user_id?: string | null
 }
 
 type FloorMapStatus = WorkspaceRecord["status"] | "reserved"
@@ -141,6 +142,10 @@ export function FloorMapPremium() {
     () => selectedWorkspaceId ? floorBookings.find(booking => booking.workspace_id === selectedWorkspaceId) ?? null : null,
     [floorBookings, selectedWorkspaceId],
   )
+  const isMyBooking = React.useMemo(() => {
+    if (!session || !selectedWorkspaceBooking) return false
+    return session.user.id === selectedWorkspaceBooking.user_id
+  }, [session, selectedWorkspaceBooking])
   const canSeeOccupantDetails = currentRole === "admin" || currentRole === "space_owner"
   const selectedWorkspaceIsReserved = Boolean(selectedWorkspaceBooking)
   const dateLocale = locale === "vi" ? "vi-VN" : undefined
@@ -253,23 +258,55 @@ export function FloorMapPremium() {
           const query = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : new URLSearchParams()
           const requestedBuildingId = query.get("buildingId")
           const requestedFloorId = query.get("floorId")
+          const requestedWorkspaceId = query.get("workspaceId")
+          const requestedStartTime = query.get("startTime")
+          const requestedEndTime = query.get("endTime")
+
           const buildingItems = buildingsData.items
           const floorItems = floorsData.items
+          const workspaceItems = workspacesData.items
 
-          const initialBuildingId = buildingItems.some(building => building.id === requestedBuildingId)
+          let initialBuildingId = buildingItems.some(building => building.id === requestedBuildingId)
             ? requestedBuildingId
             : null
-          const initialFloorId = initialBuildingId && floorItems.some(floor => floor.id === requestedFloorId && floor.building_id === initialBuildingId)
+          let initialFloorId = initialBuildingId && floorItems.some(floor => floor.id === requestedFloorId && floor.building_id === initialBuildingId)
             ? requestedFloorId ?? ""
             : initialBuildingId
               ? floorItems.find(floor => floor.building_id === initialBuildingId)?.id ?? ""
               : ""
 
+          let initialWorkspaceId = null
+          if (requestedWorkspaceId && workspaceItems.some(w => w.id === requestedWorkspaceId)) {
+            initialWorkspaceId = requestedWorkspaceId
+            const matchedWorkspace = workspaceItems.find(w => w.id === requestedWorkspaceId)
+            if (matchedWorkspace) {
+              const matchedFloor = floorItems.find(f => f.id === matchedWorkspace.floor_id)
+              if (matchedFloor) {
+                initialFloorId = matchedFloor.id
+                initialBuildingId = matchedFloor.building_id
+              }
+            }
+          }
+
+          let initialViewStart = buildDefaultTimeWindow().start
+          let initialViewEnd = buildDefaultTimeWindow().end
+          if (requestedStartTime && !Number.isNaN(Date.parse(requestedStartTime))) {
+            initialViewStart = formatDateTimeValue(new Date(requestedStartTime))
+          }
+          if (requestedEndTime && !Number.isNaN(Date.parse(requestedEndTime))) {
+            initialViewEnd = formatDateTimeValue(new Date(requestedEndTime))
+          }
+
           setBuildings(buildingItems)
-          setFloors(floorsData.items)
-          setWorkspaces(workspacesData.items)
+          setFloors(floorItems)
+          setWorkspaces(workspaceItems)
           setSelectedBuildingId(initialBuildingId)
           setSelectedFloorId(initialFloorId)
+          setSelectedWorkspaceId(initialWorkspaceId)
+          setViewStart(initialViewStart)
+          setViewEnd(initialViewEnd)
+          setBookingStart(initialViewStart)
+          setBookingEnd(initialViewEnd)
         }
       } catch (err) {
         console.error("Bootstrap error:", err)
@@ -722,21 +759,30 @@ export function FloorMapPremium() {
                       data-testid="floor-map-occupancy-details"
                       initial={{ opacity: 0 }}
                       animate={{ opacity: 1 }}
-                      className="space-y-4 rounded-2xl border border-rose-500/20 bg-rose-500/10 p-4"
+                      className={cn(
+                        "space-y-4 rounded-2xl border p-4",
+                        isMyBooking 
+                          ? "border-blue-500/20 bg-blue-500/10 dark:border-primary-500/20 dark:bg-primary-500/10" 
+                          : "border-rose-500/20 bg-rose-500/10"
+                      )}
                     >
                       <div className="flex gap-3">
-                        <AlertCircle size={20} className="mt-0.5 shrink-0 text-rose-500" />
+                        <AlertCircle className={cn("mt-0.5 shrink-0", isMyBooking ? "text-blue-500 dark:text-primary-500" : "text-rose-500")} size={20} />
                         <div className="min-w-0 space-y-1">
-                          <p className="font-black text-rose-500">{t("floorMap.occupiedDetailsTitle")}</p>
+                          <p className={cn("font-black", isMyBooking ? "text-blue-500 dark:text-primary-500" : "text-rose-500")}>
+                            {isMyBooking ? t("floorMap.myBookingDetailsTitle") : t("floorMap.occupiedDetailsTitle")}
+                          </p>
                           <p className="text-sm font-medium leading-relaxed text-slate-400">
-                            {canSeeOccupantDetails
-                              ? t("floorMap.occupiedDetailsAdmin")
-                              : t("floorMap.occupiedDetailsUser")}
+                            {isMyBooking
+                              ? t("floorMap.myBookingDetailsUser")
+                              : canSeeOccupantDetails
+                                ? t("floorMap.occupiedDetailsAdmin")
+                                : t("floorMap.occupiedDetailsUser")}
                           </p>
                         </div>
                       </div>
                       <div className="grid gap-3 rounded-xl border border-white/5 bg-white/5 p-3 text-sm">
-                        {canSeeOccupantDetails && (
+                        {(canSeeOccupantDetails || isMyBooking) && (
                           <div>
                             <p className="text-[10px] font-black uppercase tracking-widest text-slate-500">{t("floorMap.bookedBy")}</p>
                             <p className="mt-1 truncate font-bold text-white">
@@ -832,10 +878,15 @@ export function FloorMapPremium() {
                   ) : selectedWorkspaceIsReserved ? (
                     <Button
                       data-testid="floor-map-occupied-disabled"
-                      className="h-12 w-full cursor-not-allowed bg-slate-500/20 font-black text-slate-400"
+                      className={cn(
+                        "h-12 w-full cursor-not-allowed font-black",
+                        isMyBooking
+                          ? "bg-blue-600/20 text-blue-500 border border-blue-500/20 dark:bg-primary-500/20 dark:text-primary-500 dark:border-primary-500/20"
+                          : "bg-slate-500/20 text-slate-400"
+                      )}
                       disabled
                     >
-                      {t("floorMap.occupiedForRange")}
+                      {isMyBooking ? t("floorMap.yourBookingForRange") : t("floorMap.occupiedForRange")}
                     </Button>
                   ) : (
                     <Button 

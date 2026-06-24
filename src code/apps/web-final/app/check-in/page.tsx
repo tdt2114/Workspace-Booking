@@ -266,12 +266,24 @@ export default function CheckInPage() {
     setErrorMessage(null)
     setStatus("scanning")
 
+    // Set a timeout of 7 seconds to trigger if scanner fails to initialize
+    const timeoutId = window.setTimeout(() => {
+      if (scannerStartTokenRef.current === startToken) {
+        console.warn("Camera start timed out after 7s")
+        void stopScanner()
+        setIsScannerStarting(false)
+        enableManualFallback(t("checkIn.cameraTimeout"))
+        toast({ title: t("checkIn.errorTitle"), description: t("checkIn.cameraTimeout"), variant: "error" })
+      }
+    }, 7000)
+
     void (async () => {
       try {
         await stopScanner()
 
         const container = await waitForScannerContainer()
         if (!container || scannerStartTokenRef.current !== startToken) {
+          window.clearTimeout(timeoutId)
           return
         }
 
@@ -292,6 +304,7 @@ export default function CheckInPage() {
         }
 
         if (scannerStartTokenRef.current !== startToken) {
+          window.clearTimeout(timeoutId)
           await stopScanner()
           return
         }
@@ -323,10 +336,12 @@ export default function CheckInPage() {
           () => {},
         )
 
+        window.clearTimeout(timeoutId)
         if (scannerStartTokenRef.current === startToken) {
           setIsScannerStarting(false)
         }
       } catch (err) {
+        window.clearTimeout(timeoutId)
         console.error("Scanner start error:", err)
         await stopScanner()
 

@@ -114,9 +114,11 @@ export class BookingsService {
       });
     }
 
+    const enriched = await this.enrichBookingsWithWorkspaceDetails(data as BookingRecord[]);
+
     return {
-      count: data.length,
-      items: data as BookingRecord[],
+      count: enriched.length,
+      items: enriched,
     };
   }
 
@@ -195,10 +197,11 @@ export class BookingsService {
     }
 
     const userLookup = new Map(users.map((user) => [user.id, user] as const));
+    const enriched = await this.enrichBookingsWithWorkspaceDetails(bookings);
 
     return {
-      count: bookings.length,
-      items: bookings.map((booking) => {
+      count: enriched.length,
+      items: enriched.map((booking) => {
         const matchedUser = userLookup.get(booking.user_id);
 
         return {
@@ -645,6 +648,7 @@ export class BookingsService {
           start_time: booking.start_time,
           end_time: booking.end_time,
           status: booking.status,
+          user_id: booking.user_id,
         })),
       };
     }
@@ -678,6 +682,7 @@ export class BookingsService {
           start_time: booking.start_time,
           end_time: booking.end_time,
           status: booking.status,
+          user_id: booking.user_id,
           user_email: matchedUser?.email ?? null,
           user_full_name: matchedUser?.full_name ?? null,
         };
@@ -879,6 +884,100 @@ export class BookingsService {
       count: data.length,
       items: data,
     };
+  }
+
+  private async enrichBookingsWithWorkspaceDetails(bookings: BookingRecord[]) {
+    if (bookings.length === 0) {
+      return [];
+    }
+
+    const uniqueWorkspaceIds = [
+      ...new Set(bookings.map((booking) => booking.workspace_id)),
+    ];
+
+    const supabaseAdmin = getSupabaseAdmin();
+    const { data: workspaces, error: workspacesError } = await supabaseAdmin
+      .from('workspaces')
+      .select('id, floor_id, name')
+      .in('id', uniqueWorkspaceIds);
+
+    if (workspacesError || !workspaces) {
+      console.warn('Failed to fetch workspaces for enrichment', workspacesError);
+      return bookings.map(b => ({
+        ...b,
+        workspace_name: undefined,
+        floor_name: undefined,
+        floor_id: undefined,
+        building_id: undefined,
+      }));
+    }
+
+    const uniqueFloorIds = [
+      ...new Set(workspaces.map((w) => w.floor_id).filter(Boolean)),
+    ];
+
+    let floors: any[] = [];
+    if (uniqueFloorIds.length > 0) {
+      const { data: floorsData, error: floorsError } = await supabaseAdmin
+        .from('floors')
+        .select('id, building_id, floor_number, name')
+        .in('id', uniqueFloorIds);
+      if (!floorsError && floorsData) {
+        floors = floorsData;
+      } else {
+        console.warn('Failed to fetch floors for enrichment', floorsError);
+      }
+    }
+
+    const uniqueBuildingIds = [
+      ...new Set(floors.map((f) => f.building_id).filter(Boolean)),
+    ];
+
+    let buildings: any[] = [];
+    if (uniqueBuildingIds.length > 0) {
+      const { data: buildingsData, error: buildingsError } = await supabaseAdmin
+        .from('buildings')
+        .select('id, name')
+        .in('id', uniqueBuildingIds);
+      if (!buildingsError && buildingsData) {
+        buildings = buildingsData;
+      } else {
+        console.warn('Failed to fetch buildings for enrichment', buildingsError);
+      }
+    }
+
+    const workspaceLookup = new Map(workspaces.map((w) => [w.id, w]));
+    const floorLookup = new Map(floors.map((f) => [f.id, f]));
+    const buildingLookup = new Map(buildings.map((b) => [b.id, b]));
+
+    return bookings.map((booking) => {
+      const workspace = workspaceLookup.get(booking.workspace_id);
+      const floor = workspace ? floorLookup.get(workspace.floor_id) : null;
+      const building = floor ? buildingLookup.get(floor.building_id) : null;
+
+      const workspaceName = workspace?.name ?? undefined;
+      const rawFloorName = floor
+        ? (floor.name ?? `Floor ${floor.floor_number}`)
+        : null;
+      const buildingName = building?.name ?? null;
+
+      let floorName: string | undefined = undefined;
+      if (buildingName && rawFloorName) {
+        floorName = `${buildingName} / ${rawFloorName}`;
+      } else if (rawFloorName) {
+        floorName = rawFloorName;
+      } else if (buildingName) {
+        floorName = buildingName;
+      }
+
+      return {
+        ...booking,
+        workspace_name: workspaceName,
+        floor_name: floorName,
+        floor_id: workspace?.floor_id ?? undefined,
+        building_id: floor?.building_id ?? undefined,
+      };
+    });
   }
 
   private async findWorkspaceById(id: string) {

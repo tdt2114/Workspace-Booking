@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy, UserCog, Settings, ShieldCheck, Search, Users, Clock, Ban, QrCode, CalendarClock, Wrench } from "lucide-react"
+import { Building2, Layers, MapPin, Plus, Save, Trash2, Upload, AlertCircle, ChevronRight, ChevronDown, FileCode, Info, CheckCircle2, CircleDot, ExternalLink, Copy, UserCog, Settings, ShieldCheck, Search, Users, Clock, Ban, QrCode, CalendarClock, Wrench } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase/client"
@@ -81,6 +81,8 @@ interface TabButtonProps {
 
 interface BuildingPanelProps {
   buildings: Building[]
+  floors: Floor[]
+  workspaces: Workspace[]
   onRefresh: () => Promise<void>
   apiBaseUrl: string
   token: string
@@ -598,7 +600,7 @@ function SpaceSetupModule({
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.22, ease: "easeOut" }}
             >
-              {effectiveActiveTab === "buildings" && isAdmin ? <BuildingPanel buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
+              {effectiveActiveTab === "buildings" && isAdmin ? <BuildingPanel buildings={buildings} floors={floors} workspaces={workspaces} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
               {effectiveActiveTab === "floors" && isAdmin ? <FloorPanel floors={floors} buildings={buildings} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
               {effectiveActiveTab === "workspaces" ? <WorkspacePanel workspaces={workspaces} floors={floors} buildings={buildings} users={users} currentUserId={currentUserId} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} userRole={userRole} /> : null}
               {effectiveActiveTab === "svg-mapping" ? <SvgMapper floors={floors} onRefresh={onRefresh} apiBaseUrl={apiBaseUrl} token={token} /> : null}
@@ -718,7 +720,7 @@ function UserManagementModule({
   const { toast } = useToast()
   const [search, setSearch] = React.useState("")
   const [roleFilter, setRoleFilter] = React.useState<"all" | "user" | "space_owner" | "admin" | "blocked">("all")
-  const [form, setForm] = React.useState({ email: "", password: "", fullName: "" })
+  const [form, setForm] = React.useState({ email: "", password: "", fullName: "", role: "admin" })
   const [isSaving, setIsSaving] = React.useState(false)
 
   const filteredUsers = users.filter((user) => {
@@ -738,19 +740,26 @@ function UserManagementModule({
       const res = await fetch(`${apiBaseUrl}/users/admin`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ email: form.email.trim(), password: form.password, fullName: form.fullName.trim() || undefined }),
+        body: JSON.stringify({
+          email: form.email.trim(),
+          password: form.password,
+          fullName: form.fullName.trim() || undefined,
+          role: form.role,
+        }),
       })
 
       if (res.ok) {
-        setForm({ email: "", password: "", fullName: "" })
+        const roleLabel = form.role === "space_owner" ? "Space Owner" : "Admin"
+        setForm({ email: "", password: "", fullName: "", role: "admin" })
         await onRefreshUsers()
-        toast({ title: "Admin account created", variant: "success" })
+        toast({ title: `${roleLabel} account created`, variant: "success" })
       } else {
-        const message = await readApiError(res, "Could not create admin account.")
-        toast({ title: "Create admin failed", description: message, variant: "error" })
+        const roleLabel = form.role === "space_owner" ? "space owner" : "admin"
+        const message = await readApiError(res, `Could not create ${roleLabel} account.`)
+        toast({ title: `Create ${roleLabel} failed`, description: message, variant: "error" })
       }
     } catch {
-      toast({ title: "Create admin failed", description: "Network error. Please try again.", variant: "error" })
+      toast({ title: "Create account failed", description: "Network error. Please try again.", variant: "error" })
     } finally {
       setIsSaving(false)
     }
@@ -793,14 +802,21 @@ function UserManagementModule({
 
         <div className="space-y-6">
           <ConsoleCard className="p-5 sm:p-6">
-            <SectionHeader title="Create Admin Account" description="Only System Admin can create another admin." />
+            <SectionHeader title="Create Privileged Account" description="Create a new Admin or Space Owner account directly." />
             <div className="mt-5 space-y-4">
               <Input className={adminInputClass} placeholder="Full name" value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} />
               <Input className={adminInputClass} placeholder="Email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
               <Input className={adminInputClass} placeholder="Temporary password" type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
-              <Button className="h-12 w-full rounded-2xl bg-blue-600 font-black hover:bg-blue-700" onClick={createAdmin} isLoading={isSaving} loadingText="Creating admin...">
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-[0.2em] text-slate-500">Account Role</label>
+                <select className={cn(adminSelectClass, "h-12 w-full rounded-2xl")} value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+                  <option value="admin">System Admin</option>
+                  <option value="space_owner">Space Owner</option>
+                </select>
+              </div>
+              <Button className="h-12 w-full rounded-2xl bg-blue-600 font-black hover:bg-blue-700" onClick={createAdmin} isLoading={isSaving} loadingText="Creating account...">
                 <ShieldCheck size={17} className="mr-2" />
-                Create Admin
+                Create Account
               </Button>
             </div>
           </ConsoleCard>
@@ -1092,15 +1108,159 @@ function tFallback(t: (path: string) => string, path: string, fallback: string) 
   return value === path ? fallback : value
 }
 
+interface ConfirmModalProps {
+  isOpen: boolean
+  title: string
+  message: string
+  onConfirm: () => void
+  onCancel: () => void
+  confirmText?: string
+  cancelText?: string
+  isLoading?: boolean
+}
+
+function ConfirmModal({
+  isOpen,
+  title,
+  message,
+  onConfirm,
+  onCancel,
+  confirmText = "Confirm",
+  cancelText = "Cancel",
+  isLoading = false
+}: ConfirmModalProps) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onCancel}
+            className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 15 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 15 }}
+            transition={{ type: "spring", duration: 0.3 }}
+            className="relative w-full max-w-md overflow-hidden rounded-[2rem] border border-slate-200 bg-white p-6 shadow-2xl dark:border-white/10 dark:bg-slate-950"
+          >
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 text-rose-600">
+                <AlertCircle size={24} />
+                <h3 className="text-xl font-black tracking-tight text-slate-950 dark:text-white">{title}</h3>
+              </div>
+              <p className="text-sm font-semibold leading-relaxed text-slate-600 dark:text-slate-300">{message}</p>
+              <div className="flex gap-3 justify-end pt-4">
+                <Button
+                  variant="outline"
+                  className="rounded-xl h-11 px-5 font-bold"
+                  onClick={onCancel}
+                  disabled={isLoading}
+                >
+                  {cancelText}
+                </Button>
+                <Button
+                  className="rounded-xl h-11 px-5 font-black bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-500/20"
+                  onClick={onConfirm}
+                  isLoading={isLoading}
+                >
+                  {confirmText}
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  )
+}
+
 // --- Specialized setup panels ---
 
-function BuildingPanel({ buildings, onRefresh, apiBaseUrl, token }: BuildingPanelProps) {
-  const { t } = useLanguage()
+function BuildingPanel({ buildings, floors, workspaces, onRefresh, apiBaseUrl, token }: BuildingPanelProps) {
+  const { t, locale } = useLanguage()
   const { toast } = useToast()
   const [isSaving, setIsSaving] = React.useState(false)
   const [submitted, setSubmitted] = React.useState(false)
   const [form, setForm] = React.useState({ name: "", address: "", totalFloors: 1, openTime: "08:00", closeTime: "18:00" })
   const isValid = Boolean(form.name.trim()) && Number.isFinite(form.totalFloors) && form.totalFloors > 0 && Boolean(form.openTime) && Boolean(form.closeTime)
+
+  // Hierarchical view state
+  const [expandedBuildings, setExpandedBuildings] = React.useState<Record<string, boolean>>({})
+  const [expandedFloors, setExpandedFloors] = React.useState<Record<string, boolean>>({})
+  const [isDeleting, setIsDeleting] = React.useState<Record<string, boolean>>({})
+
+  // Custom confirmation modal state
+  const [confirmModal, setConfirmModal] = React.useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    confirmText: string
+    cancelText: string
+    onConfirm: () => void
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    confirmText: "",
+    cancelText: "",
+    onConfirm: () => {}
+  })
+
+  // Floor form state
+  const [addingFloorToBuildingId, setAddingFloorToBuildingId] = React.useState<string | null>(null)
+  const [newFloorForm, setNewFloorForm] = React.useState({ floorNumber: 1, name: "" })
+
+  // Workspace form state
+  const [addingWorkspaceToFloorId, setAddingWorkspaceToFloorId] = React.useState<string | null>(null)
+  const [newWorkspaceForm, setNewWorkspaceForm] = React.useState({
+    name: "",
+    type: "desk",
+    status: "available",
+    svgElementId: "",
+    capacity: 1,
+    qrCodeValue: "",
+  })
+
+  // SVG parsing / mapping state per floor
+  const [floorSvgIds, setFloorSvgIds] = React.useState<Record<string, string[]>>({})
+  const [loadingFloorSvgIds, setLoadingFloorSvgIds] = React.useState<Record<string, boolean>>({})
+  const [uploadingSvgForFloorId, setUploadingSvgForFloorId] = React.useState<string | null>(null)
+
+  const loadFloorSvgIds = React.useCallback(async (floorId: string) => {
+    if (!floorId || !token) return
+    const floor = floors.find((item) => item.id === floorId)
+    if (!floor?.svg_map_url) return
+
+    setLoadingFloorSvgIds(prev => ({ ...prev, [floorId]: true }))
+    try {
+      const res = await fetch(`${apiBaseUrl}/floors/${floorId}/svg`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        const svgText = await res.text()
+        const ids = Array.from(svgText.matchAll(/\sid=["']([^"']+)["']/g)).map((match) => match[1]).filter(Boolean)
+        const uniqueIds = Array.from(new Set(ids))
+        setFloorSvgIds(prev => ({ ...prev, [floorId]: uniqueIds }))
+      }
+    } catch {
+      // Ignore error loading SVG ids quietly
+    } finally {
+      setLoadingFloorSvgIds(prev => ({ ...prev, [floorId]: false }))
+    }
+  }, [apiBaseUrl, floors, token])
+
+  const copySvgId = async (svgId: string) => {
+    try {
+      await navigator.clipboard.writeText(svgId)
+      toast({ title: tFallback(t, "admin.svgIdCopied", "SVG ID copied."), description: svgId, variant: "success" })
+    } catch {
+      toast({ title: tFallback(t, "admin.copyFailed", "Could not copy SVG ID."), description: svgId, variant: "error" })
+    }
+  }
 
   const handleCreate = async () => {
     if (!token) return
@@ -1130,38 +1290,604 @@ function BuildingPanel({ buildings, onRefresh, apiBaseUrl, token }: BuildingPane
     } finally { setIsSaving(false) }
   }
 
+  const requestDeleteBuilding = (buildingId: string, name: string) => {
+    const isVi = locale === "vi"
+    setConfirmModal({
+      isOpen: true,
+      title: isVi ? "Xóa Tòa Nhà" : "Delete Building",
+      message: isVi 
+        ? `Bạn có chắc chắn muốn xóa tòa nhà "${name}" cùng tất cả các tầng và không gian làm việc trực thuộc? Hành động này không thể hoàn tác.`
+        : `Are you sure you want to delete the building "${name}" and all its floors and workspaces? This action cannot be undone.`,
+      confirmText: isVi ? "Xóa tòa nhà" : "Delete Building",
+      cancelText: isVi ? "Hủy" : "Cancel",
+      onConfirm: () => {
+        void executeDeleteBuilding(buildingId)
+      }
+    })
+  }
+
+  const executeDeleteBuilding = async (buildingId: string) => {
+    if (!token) return
+    setIsDeleting(prev => ({ ...prev, [buildingId]: true }))
+    setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    try {
+      const res = await fetch(`${apiBaseUrl}/buildings/${buildingId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        toast({ title: locale === "vi" ? "Đã xóa tòa nhà thành công." : "Building deleted successfully.", variant: "success" })
+        await onRefresh()
+      } else {
+        const message = await readApiError(res, "Could not delete building.")
+        toast({ title: locale === "vi" ? "Xóa tòa nhà thất bại" : "Delete failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: locale === "vi" ? "Xóa tòa nhà thất bại" : "Delete failed", description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setIsDeleting(prev => {
+        const next = { ...prev }
+        delete next[buildingId]
+        return next
+      })
+    }
+  }
+
+  const handleCreateFloor = async (buildingId: string) => {
+    if (!token) return
+    const { floorNumber, name } = newFloorForm
+    if (!floorNumber || floorNumber < -10 || floorNumber > 300) {
+      toast({ title: "Invalid floor number", description: "Floor number must be between -10 and 300.", variant: "error" })
+      return
+    }
+    setIsSaving(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/floors`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          buildingId,
+          floorNumber,
+          name: name.trim() || undefined
+        })
+      })
+      if (res.ok) {
+        toast({ title: t("admin.floorCreated"), variant: "success" })
+        setAddingFloorToBuildingId(null)
+        setNewFloorForm({ floorNumber: 1, name: "" })
+        await onRefresh()
+      } else {
+        const message = await readApiError(res, t("admin.createFailed"))
+        toast({ title: t("admin.createFailed"), description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: t("admin.createFailed"), description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const requestDeleteFloor = (floorId: string, name: string) => {
+    const isVi = locale === "vi"
+    setConfirmModal({
+      isOpen: true,
+      title: isVi ? "Xóa Tầng" : "Delete Floor",
+      message: isVi 
+        ? `Bạn có chắc chắn muốn xóa tầng "${name}" cùng tất cả các không gian làm việc trực thuộc? Hành động này không thể hoàn tác.`
+        : `Are you sure you want to delete the floor "${name}" and all its workspaces? This action cannot be undone.`,
+      confirmText: isVi ? "Xóa tầng" : "Delete Floor",
+      cancelText: isVi ? "Hủy" : "Cancel",
+      onConfirm: () => {
+        void executeDeleteFloor(floorId)
+      }
+    })
+  }
+
+  const executeDeleteFloor = async (floorId: string) => {
+    if (!token) return
+    setIsDeleting(prev => ({ ...prev, [floorId]: true }))
+    setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    try {
+      const res = await fetch(`${apiBaseUrl}/floors/${floorId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        toast({ title: locale === "vi" ? "Đã xóa tầng thành công." : "Floor deleted successfully.", variant: "success" })
+        await onRefresh()
+      } else {
+        const message = await readApiError(res, "Could not delete floor.")
+        toast({ title: locale === "vi" ? "Xóa tầng thất bại" : "Delete failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: locale === "vi" ? "Xóa tầng thất bại" : "Delete failed", description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setIsDeleting(prev => {
+        const next = { ...prev }
+        delete next[floorId]
+        return next
+      })
+    }
+  }
+
+  const handleFloorSvgUpload = async (floorId: string, file: File) => {
+    if (!token) return
+    setUploadingSvgForFloorId(floorId)
+    try {
+      const formData = new FormData()
+      formData.append("file", file)
+      const res = await fetch(`${apiBaseUrl}/floors/${floorId}/svg`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      })
+      if (res.ok) {
+        toast({ title: t("admin.svgUploaded"), variant: "success" })
+        await onRefresh()
+        await loadFloorSvgIds(floorId)
+      } else {
+        const message = await readApiError(res, t("admin.uploadFailed"))
+        toast({ title: t("admin.uploadFailed"), description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: t("admin.uploadFailed"), description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setUploadingSvgForFloorId(null)
+    }
+  }
+
+  const requestClearFloorSvg = (floorId: string, name: string) => {
+    const isVi = locale === "vi"
+    setConfirmModal({
+      isOpen: true,
+      title: isVi ? "Xóa Sơ Đồ SVG" : "Clear SVG Map",
+      message: isVi 
+        ? `Bạn có chắc chắn muốn xóa sơ đồ SVG của tầng "${name}" không?`
+        : `Are you sure you want to clear the SVG map for floor "${name}"?`,
+      confirmText: isVi ? "Xóa sơ đồ" : "Clear Map",
+      cancelText: isVi ? "Hủy" : "Cancel",
+      onConfirm: () => {
+        void executeClearFloorSvg(floorId)
+      }
+    })
+  }
+
+  const executeClearFloorSvg = async (floorId: string) => {
+    if (!token) return
+    setUploadingSvgForFloorId(floorId)
+    setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    try {
+      const res = await fetch(`${apiBaseUrl}/floors/${floorId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ svgMapUrl: null })
+      })
+      if (res.ok) {
+        toast({ title: locale === "vi" ? "Đã xóa sơ đồ SVG thành công." : "SVG map cleared successfully.", variant: "success" })
+        setFloorSvgIds(prev => {
+          const next = { ...prev }
+          delete next[floorId]
+          return next
+        })
+        await onRefresh()
+      } else {
+        const message = await readApiError(res, "Could not clear SVG map.")
+        toast({ title: locale === "vi" ? "Xóa sơ đồ thất bại" : "Failed to clear SVG map", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: locale === "vi" ? "Xóa sơ đồ thất bại" : "Failed to clear SVG map", description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setUploadingSvgForFloorId(null)
+    }
+  }
+
+  const handleCreateWorkspace = async (floorId: string) => {
+    if (!token) return
+    const { name, type, status, svgElementId, capacity, qrCodeValue } = newWorkspaceForm
+    if (!name.trim() || !svgElementId.trim() || !qrCodeValue.trim()) {
+      toast({ title: "Validation error", description: "Name, SVG ID, and QR code value are required.", variant: "error" })
+      return
+    }
+    setIsSaving(true)
+    try {
+      const res = await fetch(`${apiBaseUrl}/workspaces`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          floorId,
+          name: name.trim(),
+          type,
+          status,
+          svgElementId: svgElementId.trim(),
+          qrCodeValue: qrCodeValue.trim(),
+          capacity
+        })
+      })
+      if (res.ok) {
+        toast({ title: t("admin.workspaceCreated"), variant: "success" })
+        setAddingWorkspaceToFloorId(null)
+        setNewWorkspaceForm({ name: "", type: "desk", status: "available", svgElementId: "", capacity: 1, qrCodeValue: "" })
+        await onRefresh()
+      } else {
+        const message = await readApiError(res, t("admin.createFailed"))
+        toast({ title: t("admin.createFailed"), description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: t("admin.createFailed"), description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const requestDeleteWorkspace = (workspaceId: string, name: string) => {
+    const isVi = locale === "vi"
+    setConfirmModal({
+      isOpen: true,
+      title: isVi ? "Xóa Không Gian" : "Delete Workspace",
+      message: isVi 
+        ? `Bạn có chắc chắn muốn xóa không gian làm việc "${name}"? Hành động này không thể hoàn tác.`
+        : `Are you sure you want to delete the workspace "${name}"? This action cannot be undone.`,
+      confirmText: isVi ? "Xóa không gian" : "Delete Workspace",
+      cancelText: isVi ? "Hủy" : "Cancel",
+      onConfirm: () => {
+        void executeDeleteWorkspace(workspaceId)
+      }
+    })
+  }
+
+  const executeDeleteWorkspace = async (workspaceId: string) => {
+    if (!token) return
+    setIsDeleting(prev => ({ ...prev, [workspaceId]: true }))
+    setConfirmModal(prev => ({ ...prev, isOpen: false }))
+    try {
+      const res = await fetch(`${apiBaseUrl}/workspaces/${workspaceId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (res.ok) {
+        toast({ title: locale === "vi" ? "Đã xóa không gian thành công." : "Workspace deleted successfully.", variant: "success" })
+        await onRefresh()
+      } else {
+        const message = await readApiError(res, "Could not delete workspace.")
+        toast({ title: locale === "vi" ? "Xóa thất bại" : "Delete failed", description: message, variant: "error" })
+      }
+    } catch {
+      toast({ title: locale === "vi" ? "Xóa thất bại" : "Delete failed", description: t("admin.networkError"), variant: "error" })
+    } finally {
+      setIsDeleting(prev => {
+        const next = { ...prev }
+        delete next[workspaceId]
+        return next
+      })
+    }
+  }
+
+  const toggleBuilding = (buildingId: string) => {
+    setExpandedBuildings(prev => ({ ...prev, [buildingId]: !prev[buildingId] }))
+  }
+
+  const toggleFloor = (floorId: string) => {
+    setExpandedFloors(prev => {
+      const next = { ...prev, [floorId]: !prev[floorId] }
+      if (next[floorId]) {
+        void loadFloorSvgIds(floorId)
+      }
+      return next
+    })
+  }
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <Card className={cn("lg:col-span-2", adminCardClass)}>
         <CardHeader>
           <CardTitle>{t("admin.activeFacilities")}</CardTitle>
-          <CardDescription>{t("admin.activeFacilitiesDesc")}</CardDescription>
+          <CardDescription>Hierarchical view of your buildings, floors, maps, and workspaces.</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {buildings.map((b: Building) => (
-            <div key={b.id} className={cn("group flex items-center justify-between p-5", adminPanelClass)}>
-              <div className="flex items-center gap-4">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 transition-transform group-hover:scale-105 dark:bg-primary-500/10 dark:text-primary-400">
-                  <Building2 size={28} />
+        <CardContent className="space-y-6">
+          {buildings.length > 0 ? (
+            buildings.map((b: Building) => {
+              const buildingFloors = floors
+                .filter((f) => f.building_id === b.id)
+                .sort((a, b) => a.floor_number - b.floor_number)
+              const isBuildingExpanded = Boolean(expandedBuildings[b.id])
+
+              return (
+                <div key={b.id} className="border border-slate-200 dark:border-white/10 rounded-[1.5rem] p-4 bg-white dark:bg-slate-950 transition-all hover:shadow-md">
+                  {/* Building Header Row */}
+                  <div className="flex items-center justify-between p-2">
+                    <div className="flex items-center gap-4 cursor-pointer select-none flex-1" onClick={() => toggleBuilding(b.id)}>
+                      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-blue-100 text-blue-600 dark:bg-primary-500/10 dark:text-primary-400">
+                        <Building2 size={24} />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-black text-slate-950 dark:text-white flex items-center gap-2">
+                          {b.name}
+                          {isBuildingExpanded ? <ChevronDown size={16} className="text-slate-400" /> : <ChevronRight size={16} className="text-slate-400" />}
+                        </h4>
+                        <p className="text-xs font-semibold text-slate-500">{b.address || t("admin.noAddress")}</p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center gap-4">
+                      <div className="text-right">
+                        <p className="text-[10px] font-bold text-slate-500 uppercase">{t("admin.floorsLabel")}</p>
+                        <p className="font-black text-slate-950 dark:text-white">{b.total_floors}</p>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"
+                        onClick={() => {
+                          setAddingFloorToBuildingId(b.id)
+                          setExpandedBuildings(prev => ({ ...prev, [b.id]: true }))
+                        }}
+                        title="Quick Add Floor"
+                      >
+                        <Plus size={20} />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="text-slate-400 hover:text-red-600 disabled:opacity-50"
+                        onClick={() => requestDeleteBuilding(b.id, b.name)}
+                        disabled={isDeleting[b.id]}
+                        title="Delete Building"
+                      >
+                        <Trash2 size={20} />
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Expanded Building: Floor List & Add Floor Inline Form */}
+                  {isBuildingExpanded && (
+                    <div className="mt-4 ml-6 pl-6 border-l-2 border-slate-200/60 dark:border-white/10 space-y-4 py-2 relative">
+                      {/* Add Floor Inline Form */}
+                      {addingFloorToBuildingId === b.id && (
+                        <div className="p-4 border border-blue-200 bg-blue-50/50 dark:border-primary-500/20 dark:bg-primary-500/5 rounded-xl space-y-3">
+                          <p className="text-xs font-black uppercase text-blue-600 dark:text-primary-300">Add New Floor</p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Floor Number</label>
+                              <Input
+                                type="number"
+                                className="h-10 bg-white dark:bg-slate-900"
+                                value={newFloorForm.floorNumber}
+                                onChange={(e) => setNewFloorForm({ ...newFloorForm, floorNumber: parseInt(e.target.value) || 1 })}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Floor Name (Optional)</label>
+                              <Input
+                                placeholder="e.g. Floor A"
+                                className="h-10 bg-white dark:bg-slate-900"
+                                value={newFloorForm.name}
+                                onChange={(e) => setNewFloorForm({ ...newFloorForm, name: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                          <div className="flex gap-2 justify-end">
+                            <Button size="sm" variant="outline" className="h-9 font-semibold" onClick={() => setAddingFloorToBuildingId(null)}>Cancel</Button>
+                            <Button size="sm" className="h-9 font-bold bg-blue-600 text-white hover:bg-blue-700" onClick={() => void handleCreateFloor(b.id)} isLoading={isSaving}>Save Floor</Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Floor Rows */}
+                      {buildingFloors.length > 0 ? (
+                        buildingFloors.map((floor) => {
+                          const isFloorExpanded = Boolean(expandedFloors[floor.id])
+                          const floorWorkspaces = workspaces
+                            .filter((w) => w.floor_id === floor.id)
+                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                          const hasSvg = Boolean(floor.svg_map_url)
+                          const detectedIds = floorSvgIds[floor.id] || []
+                          const isLoadingSvg = Boolean(loadingFloorSvgIds[floor.id])
+
+                          return (
+                            <div key={floor.id} className="border border-slate-150 dark:border-white/5 rounded-xl p-3 bg-slate-50/50 dark:bg-white/[0.01]">
+                              {/* Floor Header */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3 cursor-pointer select-none" onClick={() => toggleFloor(floor.id)}>
+                                  <Layers size={18} className="text-slate-500" />
+                                  <div>
+                                    <span className="font-bold text-slate-900 dark:text-white">
+                                      {floor.name || t("common.floorFallback").replace("{number}", String(floor.floor_number))}
+                                    </span>
+                                    <span className={cn("ml-2 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider border",
+                                      hasSvg ? "bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20" : "bg-amber-50 text-amber-600 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20"
+                                    )}>
+                                      {hasSvg ? "SVG Mapped" : "No SVG"}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-semibold text-slate-500">{floorWorkspaces.length} workspaces</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8 text-slate-400 hover:text-red-500"
+                                    onClick={() => requestDeleteFloor(floor.id, floor.name || t("common.floorFallback").replace("{number}", String(floor.floor_number)))}
+                                    disabled={isDeleting[floor.id]}
+                                    title="Delete Floor"
+                                  >
+                                    <Trash2 size={16} />
+                                  </Button>
+                                </div>
+                              </div>
+
+                              {/* Expanded Floor Info (SVG upload, Workspaces) */}
+                              {isFloorExpanded && (
+                                <div className="mt-3 ml-4 pl-4 border-l border-dashed border-slate-200/80 dark:border-white/10 space-y-4 py-1">
+                                  {/* SVG Mapper Section inside floor */}
+                                  <div className="p-3 border border-slate-200 dark:border-white/5 bg-white dark:bg-slate-900 rounded-xl space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="text-xs font-black uppercase text-slate-500">SVG Map</h5>
+                                      {hasSvg && (
+                                        <Button size="sm" variant="outline" className="h-7 text-[10px] text-red-500 border-red-200 hover:bg-red-50 dark:border-red-500/20 dark:text-red-400" onClick={() => requestClearFloorSvg(floor.id, floor.name || t("common.floorFallback").replace("{number}", String(floor.floor_number)))}>
+                                          Clear Map
+                                        </Button>
+                                      )}
+                                    </div>
+                                    
+                                    {hasSvg ? (
+                                      <div className="space-y-2">
+                                        <p className="text-xs font-semibold text-slate-500">Click detected SVG ID below to copy and use for workspace layout:</p>
+                                        {isLoadingSvg ? (
+                                          <p className="text-xs text-slate-400 italic">Reading SVG IDs...</p>
+                                        ) : detectedIds.length > 0 ? (
+                                          <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto p-1.5 bg-slate-50 dark:bg-white/5 rounded-lg border border-slate-100 dark:border-white/5">
+                                            {detectedIds.map(id => (
+                                              <button
+                                                key={id}
+                                                type="button"
+                                                onClick={() => void copySvgId(id)}
+                                                className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-white border border-slate-200 text-slate-800 hover:bg-blue-50 hover:border-blue-300 dark:bg-slate-800 dark:border-white/10 dark:text-slate-200"
+                                              >
+                                                {id}
+                                              </button>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="text-xs text-amber-500 italic">No SVG IDs detected. Add id attributes to desk/room elements in your SVG file.</p>
+                                        )}
+                                      </div>
+                                    ) : (
+                                      <div className="flex items-center gap-3">
+                                        <div className="relative inline-block">
+                                          <Button size="sm" className="bg-blue-600 hover:bg-blue-700 font-bold text-xs h-8">
+                                            <Upload size={14} className="mr-1.5" /> Upload SVG
+                                          </Button>
+                                          <input
+                                            type="file"
+                                            className="absolute inset-0 opacity-0 cursor-pointer"
+                                            accept=".svg"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0]
+                                              if (file) void handleFloorSvgUpload(floor.id, file)
+                                            }}
+                                            disabled={uploadingSvgForFloorId === floor.id}
+                                          />
+                                        </div>
+                                        {uploadingSvgForFloorId === floor.id && <span className="text-xs text-slate-400 animate-pulse">Uploading...</span>}
+                                      </div>
+                                    )}
+                                  </div>
+
+                                  {/* Workspaces list */}
+                                  <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                      <h5 className="text-xs font-black uppercase text-slate-500">Workspaces ({floorWorkspaces.length})</h5>
+                                      <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-7 text-[11px] text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:text-blue-300 font-bold"
+                                        onClick={() => setAddingWorkspaceToFloorId(floor.id)}
+                                      >
+                                        <Plus size={12} className="mr-1" /> Add Workspace
+                                      </Button>
+                                    </div>
+
+                                    {/* Add Workspace Form */}
+                                    {addingWorkspaceToFloorId === floor.id && (
+                                      <div className="p-3 border border-blue-200 bg-blue-50/30 dark:border-primary-500/20 dark:bg-primary-500/5 rounded-xl space-y-3">
+                                        <p className="text-xs font-black uppercase text-blue-600">New Workspace</p>
+                                        <div className="grid grid-cols-2 gap-2">
+                                          <div>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Name</label>
+                                            <Input placeholder="e.g. Desk A-01" className="h-9 bg-white dark:bg-slate-900" value={newWorkspaceForm.name} onChange={e => setNewWorkspaceForm({ ...newWorkspaceForm, name: e.target.value })} />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Type</label>
+                                            <select className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 font-semibold text-xs focus:outline-none dark:border-white/10 dark:bg-slate-800 dark:text-white" value={newWorkspaceForm.type} onChange={e => setNewWorkspaceForm({ ...newWorkspaceForm, type: e.target.value })}>
+                                              {["desk", "meeting_room", "focus_room", "lab", "room", "parking"].map(type => (
+                                                <option key={type} value={type} className="dark:bg-slate-900">{type.toUpperCase()}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">SVG Element ID</label>
+                                            <Input placeholder="e.g. desk_a_01" className="h-9 bg-white dark:bg-slate-900" value={newWorkspaceForm.svgElementId} onChange={e => setNewWorkspaceForm({ ...newWorkspaceForm, svgElementId: e.target.value })} />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">QR Value</label>
+                                            <Input placeholder="e.g. QR-A01" className="h-9 bg-white dark:bg-slate-900" value={newWorkspaceForm.qrCodeValue} onChange={e => setNewWorkspaceForm({ ...newWorkspaceForm, qrCodeValue: e.target.value })} />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Capacity</label>
+                                            <Input type="number" min={1} className="h-9 bg-white dark:bg-slate-900" value={newWorkspaceForm.capacity} onChange={e => setNewWorkspaceForm({ ...newWorkspaceForm, capacity: parseInt(e.target.value) || 1 })} />
+                                          </div>
+                                          <div>
+                                            <label className="text-[9px] font-bold text-slate-500 uppercase ml-1">Status</label>
+                                            <select className="h-9 w-full rounded-xl border border-slate-200 bg-white px-2 font-semibold text-xs focus:outline-none dark:border-white/10 dark:bg-slate-800 dark:text-white" value={newWorkspaceForm.status} onChange={e => setNewWorkspaceForm({ ...newWorkspaceForm, status: e.target.value })}>
+                                              {["available", "maintenance", "inactive"].map(status => (
+                                                <option key={status} value={status} className="dark:bg-slate-900">{status.toUpperCase()}</option>
+                                              ))}
+                                            </select>
+                                          </div>
+                                        </div>
+                                        <div className="flex gap-2 justify-end">
+                                          <Button size="sm" variant="outline" className="h-8 text-xs font-semibold" onClick={() => setAddingWorkspaceToFloorId(null)}>Cancel</Button>
+                                          <Button size="sm" className="h-8 text-xs font-bold bg-blue-600 text-white hover:bg-blue-700" onClick={() => void handleCreateWorkspace(floor.id)} isLoading={isSaving}>Save</Button>
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {/* Workspaces list table */}
+                                    {floorWorkspaces.length > 0 ? (
+                                      <div className="overflow-hidden border border-slate-100 dark:border-white/5 rounded-lg max-h-60 overflow-y-auto">
+                                        <table className="w-full text-left text-xs border-collapse">
+                                          <thead>
+                                            <tr className="bg-slate-100 dark:bg-white/5 text-slate-500 font-bold sticky top-0">
+                                              <th className="p-2">Name</th>
+                                              <th className="p-2">Type</th>
+                                              <th className="p-2">SVG ID</th>
+                                              <th className="p-2">Capacity</th>
+                                              <th className="p-2 text-right">Action</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-slate-100 dark:divide-white/5">
+                                            {floorWorkspaces.map(w => (
+                                              <tr key={w.id} className="hover:bg-slate-50 dark:hover:bg-white/[0.02]">
+                                                <td className="p-2 font-bold text-slate-900 dark:text-white">{w.name}</td>
+                                                <td className="p-2 text-slate-500">{w.type.toUpperCase()}</td>
+                                                <td className="p-2 font-mono text-[10px]">{w.svg_element_id}</td>
+                                                <td className="p-2">{w.capacity}</td>
+                                                <td className="p-2 text-right">
+                                                  <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    className="h-7 w-7 text-slate-400 hover:text-red-500"
+                                                    onClick={() => requestDeleteWorkspace(w.id, w.name)}
+                                                    disabled={isDeleting[w.id]}
+                                                  >
+                                                    <Trash2 size={13} />
+                                                  </Button>
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    ) : (
+                                      <p className="text-xs text-slate-400 italic py-2">No workspaces added yet.</p>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })
+                      ) : (
+                        <p className="text-xs text-slate-400 italic py-2">No floors added to this building yet.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
-                <div>
-                  <h4 className="text-lg font-black text-slate-950 dark:text-white">{b.name}</h4>
-                  <p className="text-sm font-semibold text-slate-500">{b.address || t("admin.noAddress")}</p>
-                  <p className="text-xs font-semibold text-slate-400">
-                    {b.open_time && b.close_time ? `${b.open_time.slice(0, 5)} - ${b.close_time.slice(0, 5)}` : t("floorMap.notConfigured")}
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="text-right mr-4">
-                  <p className="text-xs font-bold text-slate-500 uppercase">{t("admin.floorsLabel")}</p>
-                  <p className="font-black text-slate-950 dark:text-white">{b.total_floors}</p>
-                </div>
-                <Button variant="ghost" size="icon" className="text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-white"><Plus size={20} /></Button>
-                <Button variant="ghost" size="icon" className="text-slate-400 hover:text-red-400"><Trash2 size={20} /></Button>
-              </div>
-            </div>
-          ))}
+              )
+            })
+          ) : (
+            <p className="text-sm font-semibold text-slate-500 text-center py-6">No buildings configured. Create a building on the right to start.</p>
+          )}
         </CardContent>
       </Card>
 
@@ -1202,6 +1928,7 @@ function BuildingPanel({ buildings, onRefresh, apiBaseUrl, token }: BuildingPane
           </Button>
         </CardContent>
       </Card>
+      <ConfirmModal {...confirmModal} onCancel={() => setConfirmModal(prev => ({ ...prev, isOpen: false }))} />
     </div>
   )
 }

@@ -22,4 +22,10 @@ export class CreateAdminUserDto {
   @IsString()
   @IsNotEmpty()
   fullName?: string;
+
+  @ApiPropertyOptional({ example: 'admin', enum: ['admin', 'space_owner'] })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  role?: 'admin' | 'space_owner';
 }

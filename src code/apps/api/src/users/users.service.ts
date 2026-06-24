@@ -50,9 +50,11 @@ export class UsersService {
 
     if (error || !data.user) {
       throw new BadRequestException(
-        error?.message ?? 'Failed to create admin account',
+        error?.message ?? 'Failed to create account',
       );
     }
+
+    const targetRole = dto.role === 'space_owner' ? 'space_owner' : 'admin';
 
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('users')
@@ -60,14 +62,14 @@ export class UsersService {
         id: data.user.id,
         email: dto.email,
         full_name: dto.fullName ?? '',
-        role: 'admin',
+        role: targetRole,
       })
       .select('id, email, full_name, role, created_at')
       .single<UserRecord>();
 
     if (profileError || !profile) {
       throw new InternalServerErrorException({
-        message: 'Admin auth user was created, but profile role update failed',
+        message: 'Auth user was created, but profile role update failed',
         details: profileError?.message,
       });
     }
