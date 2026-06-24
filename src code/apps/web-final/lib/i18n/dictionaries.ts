@@ -75,7 +75,7 @@ export const dictionaries = {
     },
     dashboard: {
       hub: "Welcome to the Hub",
-      title: "Main Dashboard",
+      title: "Dashboard",
       heroLine1: "Find your ideal",
       heroAccent: "Work Experience.",
       heroDescription: "Book premium desks, meeting rooms and creative spaces with one touch. Seamlessly integrated for your productivity.",

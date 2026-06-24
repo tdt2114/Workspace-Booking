@@ -360,9 +360,9 @@ export function FloorMapPremium() {
       const isSelected = workspace.id === selectedWorkspaceId
       const isHovered = workspace.id === hoveredId
 
-      el.setAttribute("fill", style.fill)
-      el.setAttribute("stroke", isSelected ? "#3b82f6" : isHovered ? "white" : style.stroke)
-      el.setAttribute("stroke-width", isSelected ? "4" : isHovered ? "3" : "2")
+      el.style.fill = style.fill
+      el.style.stroke = isSelected ? "#3b82f6" : isHovered ? "white" : style.stroke
+      el.style.strokeWidth = isSelected ? "4" : isHovered ? "3" : "2"
       el.setAttribute("data-workspace-id", workspace.id)
       el.style.cursor = "pointer"
       el.style.transition = "all 0.2s ease"
