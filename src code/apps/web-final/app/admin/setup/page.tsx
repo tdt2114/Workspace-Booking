@@ -1229,11 +1229,70 @@ function BuildingPanel({ buildings, floors, workspaces, onRefresh, apiBaseUrl, t
   const [floorSvgIds, setFloorSvgIds] = React.useState<Record<string, string[]>>({})
   const [loadingFloorSvgIds, setLoadingFloorSvgIds] = React.useState<Record<string, boolean>>({})
   const [uploadingSvgForFloorId, setUploadingSvgForFloorId] = React.useState<string | null>(null)
+  const [syncingSvgForFloorId, setSyncingSvgForFloorId] = React.useState<string | null>(null)
 
-  const loadFloorSvgIds = React.useCallback(async (floorId: string) => {
-    if (!floorId || !token) return
+  const normalizeSvgId = React.useCallback((id: string) => id.trim().replace(/^g[-_]/i, ""), [])
+
+  const getBookableSvgIds = React.useCallback((ids: string[]) => {
+    const blockedWords = ["wall", "door", "window", "label", "text", "icon", "legend", "outline", "corridor", "path", "grid", "zone", "background", "bg"]
+    const bookableWords = ["desk", "room", "booth", "lab", "phone", "parking", "server", "pod", "seat", "office"]
+    const byNormalizedId = new Map<string, string>()
+
+    ids.forEach((rawId) => {
+      const id = rawId.trim()
+      if (!id) return
+      const normalized = normalizeSvgId(id)
+      const key = normalized.toLowerCase()
+      const searchable = key.replace(/[-_]/g, " ")
+      const hasBookableWord = bookableWords.some((word) => searchable.includes(word))
+      const hasBlockedWord = blockedWords.some((word) => searchable.includes(word))
+
+      if (!hasBookableWord || hasBlockedWord) return
+
+      const existing = byNormalizedId.get(key)
+      if (!existing || existing.startsWith("g-") || existing.startsWith("g_")) {
+        byNormalizedId.set(key, id.startsWith("g-") || id.startsWith("g_") ? normalized : id)
+      }
+    })
+
+    return Array.from(new Set(byNormalizedId.values()))
+  }, [normalizeSvgId])
+
+  const inferWorkspaceType = React.useCallback((svgId: string) => {
+    const id = svgId.toLowerCase()
+    if (id.includes("meeting") || id.includes("conference")) return "meeting_room"
+    if (id.includes("focus") || id.includes("booth") || id.includes("phone") || id.includes("pod")) return "focus_room"
+    if (id.includes("lab")) return "lab"
+    if (id.includes("parking")) return "parking"
+    if (id.includes("room") || id.includes("server")) return "room"
+    return "desk"
+  }, [])
+
+  const inferWorkspaceCapacity = React.useCallback((type: string, svgId: string) => {
+    const id = svgId.toLowerCase()
+    if (type === "meeting_room") return 6
+    if (type === "focus_room") return 1
+    if (type === "lab") return 4
+    if (id.includes("server")) return 1
+    return 1
+  }, [])
+
+  const formatWorkspaceName = React.useCallback((svgId: string) => {
+    const words = normalizeSvgId(svgId)
+      .replace(/[-_]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .split(" ")
+
+    return words
+      .map((word) => (/^\d+$/.test(word) ? word : word.charAt(0).toUpperCase() + word.slice(1)))
+      .join(" ")
+  }, [normalizeSvgId])
+
+  const loadFloorSvgIds = React.useCallback(async (floorId: string, force = false) => {
+    if (!floorId || !token) return []
     const floor = floors.find((item) => item.id === floorId)
-    if (!floor?.svg_map_url) return
+    if (!force && !floor?.svg_map_url) return []
 
     setLoadingFloorSvgIds(prev => ({ ...prev, [floorId]: true }))
     try {
@@ -1245,13 +1304,99 @@ function BuildingPanel({ buildings, floors, workspaces, onRefresh, apiBaseUrl, t
         const ids = Array.from(svgText.matchAll(/\sid=["']([^"']+)["']/g)).map((match) => match[1]).filter(Boolean)
         const uniqueIds = Array.from(new Set(ids))
         setFloorSvgIds(prev => ({ ...prev, [floorId]: uniqueIds }))
+        return uniqueIds
       }
     } catch {
       // Ignore error loading SVG ids quietly
     } finally {
       setLoadingFloorSvgIds(prev => ({ ...prev, [floorId]: false }))
     }
+    return []
   }, [apiBaseUrl, floors, token])
+
+  const syncDetectedWorkspaces = React.useCallback(async (floorId: string, ids: string[], options?: { silent?: boolean }) => {
+    if (!token) return 0
+    const bookableIds = getBookableSvgIds(ids)
+    const existingSvgIds = new Set(
+      workspaces
+        .filter((workspace) => workspace.floor_id === floorId)
+        .map((workspace) => workspace.svg_element_id.trim().toLowerCase())
+    )
+    const missingIds = bookableIds.filter((id) => !existingSvgIds.has(id.toLowerCase()))
+
+    if (!missingIds.length) {
+      if (!options?.silent) {
+        toast({
+          title: "No new spaces to sync",
+          description: "All detected bookable SVG IDs already have workspace records.",
+          variant: "success",
+        })
+      }
+      return 0
+    }
+
+    setSyncingSvgForFloorId(floorId)
+    let createdCount = 0
+    try {
+      for (const svgId of missingIds) {
+        const type = inferWorkspaceType(svgId)
+        const body = {
+          floorId,
+          name: formatWorkspaceName(svgId),
+          type,
+          status: "available",
+          svgElementId: svgId,
+          qrCodeValue: svgId,
+          capacity: inferWorkspaceCapacity(type, svgId),
+        }
+
+        let res = await fetch(`${apiBaseUrl}/workspaces`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify(body),
+        })
+
+        if (!res.ok) {
+          const message = await readApiError(res, "")
+          if (message.toLowerCase().includes("qrcodevalue")) {
+            res = await fetch(`${apiBaseUrl}/workspaces`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              body: JSON.stringify({ ...body, qrCodeValue: `${floorId.slice(0, 8)}_${svgId}` }),
+            })
+          } else {
+            throw new Error(message || "Could not sync all detected workspaces.")
+          }
+        }
+
+        if (res.ok) {
+          createdCount += 1
+        } else {
+          const message = await readApiError(res, "Could not sync all detected workspaces.")
+          throw new Error(message)
+        }
+      }
+
+      if (!options?.silent) {
+        toast({
+          title: "SVG spaces synced",
+          description: `Created ${createdCount} workspace${createdCount === 1 ? "" : "s"} from detected SVG IDs.`,
+          variant: "success",
+        })
+      }
+      await onRefresh()
+      return createdCount
+    } catch (error) {
+      toast({
+        title: "Sync failed",
+        description: error instanceof Error ? error.message : t("admin.networkError"),
+        variant: "error",
+      })
+      return createdCount
+    } finally {
+      setSyncingSvgForFloorId(null)
+    }
+  }, [apiBaseUrl, formatWorkspaceName, getBookableSvgIds, inferWorkspaceCapacity, inferWorkspaceType, onRefresh, t, toast, token, workspaces])
 
   const copySvgId = async (svgId: string) => {
     try {
@@ -1423,8 +1568,16 @@ function BuildingPanel({ buildings, floors, workspaces, onRefresh, apiBaseUrl, t
       })
       if (res.ok) {
         toast({ title: t("admin.svgUploaded"), variant: "success" })
+        const ids = await loadFloorSvgIds(floorId, true)
+        const createdCount = await syncDetectedWorkspaces(floorId, ids, { silent: true })
+        if (createdCount > 0) {
+          toast({
+            title: "SVG spaces synced",
+            description: `Created ${createdCount} workspace${createdCount === 1 ? "" : "s"} from detected SVG IDs.`,
+            variant: "success",
+          })
+        }
         await onRefresh()
-        await loadFloorSvgIds(floorId)
       } else {
         const message = await readApiError(res, t("admin.uploadFailed"))
         toast({ title: t("admin.uploadFailed"), description: message, variant: "error" })
@@ -1681,7 +1834,11 @@ function BuildingPanel({ buildings, floors, workspaces, onRefresh, apiBaseUrl, t
                             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
                           const hasSvg = Boolean(floor.svg_map_url)
                           const detectedIds = floorSvgIds[floor.id] || []
+                          const bookableSvgIds = getBookableSvgIds(detectedIds)
+                          const mappedSvgIds = new Set(floorWorkspaces.map((workspace) => workspace.svg_element_id.trim().toLowerCase()))
+                          const missingDetectedWorkspaceCount = bookableSvgIds.filter((id) => !mappedSvgIds.has(id.toLowerCase())).length
                           const isLoadingSvg = Boolean(loadingFloorSvgIds[floor.id])
+                          const isSyncingSvg = syncingSvgForFloorId === floor.id
 
                           return (
                             <div key={floor.id} className="border border-slate-150 dark:border-white/5 rounded-xl p-3 bg-slate-50/50 dark:bg-white/[0.01]">
@@ -1731,7 +1888,28 @@ function BuildingPanel({ buildings, floors, workspaces, onRefresh, apiBaseUrl, t
                                     
                                     {hasSvg ? (
                                       <div className="space-y-2">
-                                        <p className="text-xs font-semibold text-slate-500">Click detected SVG ID below to copy and use for workspace layout:</p>
+                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                          <div>
+                                            <p className="text-xs font-semibold text-slate-500">Click detected SVG ID below to copy and use for workspace layout:</p>
+                                            {bookableSvgIds.length > 0 && (
+                                              <p className="text-[10px] font-bold text-slate-400">
+                                                {missingDetectedWorkspaceCount} detected bookable ID{missingDetectedWorkspaceCount === 1 ? "" : "s"} still need workspace records.
+                                              </p>
+                                            )}
+                                          </div>
+                                          {detectedIds.length > 0 && (
+                                            <Button
+                                              size="sm"
+                                              variant="outline"
+                                              className="h-8 shrink-0 text-[11px] font-bold text-blue-600 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-500/10"
+                                              onClick={() => void syncDetectedWorkspaces(floor.id, detectedIds)}
+                                              disabled={isLoadingSvg || isSyncingSvg || missingDetectedWorkspaceCount === 0}
+                                              isLoading={isSyncingSvg}
+                                            >
+                                              <QrCode size={13} className="mr-1.5" /> Sync detected spaces
+                                            </Button>
+                                          )}
+                                        </div>
                                         {isLoadingSvg ? (
                                           <p className="text-xs text-slate-400 italic">Reading SVG IDs...</p>
                                         ) : detectedIds.length > 0 ? (

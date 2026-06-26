@@ -1,4 +1,4 @@
-export const CHECK_IN_EARLY_MINUTES = 10;
+export const CHECK_IN_EARLY_MINUTES = 15;
 export const CHECK_IN_LATE_MAX_MINUTES = 30;
 
 type BookingWindowRecord = {

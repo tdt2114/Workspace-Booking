@@ -51,6 +51,9 @@ function parseConfiguredOrigins() {
 
 function isAllowedOrigin(origin: string) {
   const configuredOrigins = parseConfiguredOrigins();
+  const allowTryCloudflare =
+    process.env.CORS_ALLOW_TRYCLOUDFLARE === 'true' ||
+    process.env.NODE_ENV !== 'production';
 
   if (configuredOrigins.includes(origin)) {
     return true;
@@ -68,7 +71,7 @@ function isAllowedOrigin(origin: string) {
     }
 
     if (
-      process.env.NODE_ENV !== 'production' &&
+      allowTryCloudflare &&
       parsedOrigin.protocol === 'https:' &&
       parsedOrigin.hostname.endsWith('.trycloudflare.com')
     ) {

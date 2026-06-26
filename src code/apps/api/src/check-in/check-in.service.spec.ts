@@ -49,7 +49,7 @@ describe('CheckInService', () => {
     service = new CheckInService();
   });
 
-  it('allows check-in exactly 10 minutes before the booking start', async () => {
+  it('allows check-in exactly 15 minutes before the booking start', async () => {
     const workspaceBuilder = createQueryBuilder({
       data: {
         id: 'workspace-1',
@@ -86,7 +86,7 @@ describe('CheckInService', () => {
         start_time: '2026-04-22T09:00:00.000Z',
         end_time: '2026-04-22T11:00:00.000Z',
         status: 'checked_in',
-        checked_in_at: '2026-04-22T08:50:00.000Z',
+        checked_in_at: '2026-04-22T08:45:00.000Z',
         cancelled_at: null,
         cancel_reason: null,
         created_at: '2026-04-22T08:00:00.000Z',
@@ -112,18 +112,18 @@ describe('CheckInService', () => {
 
     const result = await service.scan(user, {
       qrCodeValue: 'desk_a_01',
-      scannedAt: '2026-04-22T08:50:00.000Z',
+      scannedAt: '2026-04-22T08:45:00.000Z',
     });
 
     expect(result.alreadyCheckedIn).toBe(false);
     expect(result.booking.status).toBe('checked_in');
     expect(updateBuilder.update).toHaveBeenCalledWith({
       status: 'checked_in',
-      checked_in_at: '2026-04-22T08:50:00.000Z',
+      checked_in_at: '2026-04-22T08:45:00.000Z',
     });
   });
 
-  it('rejects check-in earlier than 10 minutes before start', async () => {
+  it('rejects check-in earlier than 15 minutes before start', async () => {
     const workspaceBuilder = createQueryBuilder({
       data: {
         id: 'workspace-1',
@@ -171,7 +171,7 @@ describe('CheckInService', () => {
     await expect(
       service.scan(user, {
         qrCodeValue: 'desk_a_01',
-        scannedAt: '2026-04-22T08:49:00.000Z',
+        scannedAt: '2026-04-22T08:44:00.000Z',
       }),
     ).rejects.toThrow(BadRequestException);
   });

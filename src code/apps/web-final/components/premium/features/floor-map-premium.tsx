@@ -725,26 +725,26 @@ export function FloorMapPremium() {
                 initial={{ y: 32, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 32, opacity: 0 }}
-                className="fixed inset-x-0 bottom-0 z-[80] max-h-[86dvh] shrink-0 overflow-y-auto px-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] lg:static lg:z-auto lg:max-h-none lg:w-80 lg:overflow-visible lg:px-0 lg:pb-0"
+                className="fixed inset-x-0 bottom-0 z-[80] flex max-h-[92dvh] shrink-0 flex-col px-2 pb-[env(safe-area-inset-bottom)] sm:px-3 lg:static lg:z-auto lg:max-h-none lg:w-80 lg:overflow-visible lg:px-0 lg:pb-0"
               >
-              <Card className="booking-sheet-panel flex flex-col overflow-hidden rounded-t-[2rem] shadow-2xl shadow-black/50 lg:h-full lg:rounded-[1.5rem] lg:shadow-none">
-                <div className="booking-sheet-header flex items-center justify-between p-5 sm:p-6">
+              <Card className="booking-sheet-panel flex max-h-[92dvh] min-h-0 flex-col overflow-hidden rounded-t-[1.5rem] shadow-2xl shadow-black/50 sm:rounded-t-[2rem] lg:h-full lg:max-h-none lg:rounded-[1.5rem] lg:shadow-none">
+                <div className="booking-sheet-header flex shrink-0 items-center justify-between px-4 py-3 sm:p-6">
                   <div className="space-y-2">
                     <div className="mx-auto h-1.5 w-14 rounded-full bg-white/15 lg:hidden" />
-                    <h3 className="text-xl font-bold text-white">{success ? t("floorMap.bookingConfirmed") : t("floorMap.bookingDetails")}</h3>
+                    <h3 className="text-lg font-bold text-white sm:text-xl">{success ? t("floorMap.bookingConfirmed") : t("floorMap.bookingDetails")}</h3>
                   </div>
                   <Button variant="ghost" size="icon" onClick={() => setSelectedWorkspaceId(null)} className="text-slate-500 hover:text-white">
                     <ChevronRight />
                   </Button>
                 </div>
                 
-                <div className="flex-1 space-y-6 p-5 sm:space-y-8 sm:p-6">
-                  <div className="space-y-4">
-                    <div className="booking-sheet-preview flex aspect-video w-full items-center justify-center rounded-2xl">
-                      <Layers size={48} className="text-primary-500 opacity-90" />
+                <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-4 py-4 sm:space-y-8 sm:p-6">
+                  <div className="space-y-3 sm:space-y-4">
+                    <div className="booking-sheet-preview flex h-20 w-full items-center justify-center rounded-2xl sm:aspect-video sm:h-auto">
+                      <Layers size={34} className="text-primary-500 opacity-90 sm:size-12" />
                     </div>
                     <div>
-                      <h4 data-testid="floor-map-selected-workspace-name" className="text-2xl font-black text-white break-words">{selectedWorkspace?.name}</h4>
+                      <h4 data-testid="floor-map-selected-workspace-name" className="break-words text-xl font-black text-white sm:text-2xl">{selectedWorkspace?.name}</h4>
                       <p className="text-slate-400 text-sm font-medium">{selectedFloor?.name || t("common.floorFallback").replace("{number}", String(selectedFloor?.floor_number ?? ""))}</p>
                       {selectedWorkspace?.qr_code_value ? (
                         <p data-testid="floor-map-selected-workspace-qr" className="mt-2 break-all text-xs font-mono text-slate-500">
@@ -812,7 +812,7 @@ export function FloorMapPremium() {
                   ) : null}
 
                   {!selectedWorkspaceIsReserved && (
-                  <div className="space-y-4">
+                  <div className="space-y-3 sm:space-y-4">
                     <div className="space-y-2">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] ml-1">{t("floorMap.startTime")}</label>
                       <div className="relative group">
@@ -820,7 +820,7 @@ export function FloorMapPremium() {
                         <Input 
                           data-testid="floor-map-booking-start"
                           type="datetime-local" 
-                          className="booking-sheet-input h-12 rounded-xl pl-12 transition-all focus:border-primary-500"
+                          className="booking-sheet-input h-12 min-w-0 rounded-xl pl-12 pr-3 text-sm transition-all focus:border-primary-500"
                           value={bookingStart}
                           onChange={(e) => setBookingStart(e.target.value)}
                         />
@@ -834,7 +834,7 @@ export function FloorMapPremium() {
                         <Input 
                           data-testid="floor-map-booking-end"
                           type="datetime-local" 
-                          className="booking-sheet-input h-12 rounded-xl pl-12 transition-all focus:border-primary-500"
+                          className="booking-sheet-input h-12 min-w-0 rounded-xl pl-12 pr-3 text-sm transition-all focus:border-primary-500"
                           value={bookingEnd}
                           onChange={(e) => setBookingEnd(e.target.value)}
                         />
@@ -860,7 +860,7 @@ export function FloorMapPremium() {
                   )}
                 </div>
 
-                <div className="booking-sheet-footer sticky bottom-0 p-5 sm:p-6 lg:static">
+                <div className="booking-sheet-footer shrink-0 px-4 pb-[calc(env(safe-area-inset-bottom)+0.875rem)] pt-3 sm:p-6 lg:static">
                   {success ? (
                     <div className="grid gap-3">
                       <Button className="h-12 w-full bg-emerald-600 font-black hover:bg-emerald-700" onClick={() => router.push("/bookings")}>
@@ -891,7 +891,7 @@ export function FloorMapPremium() {
                   ) : (
                     <Button 
                       data-testid="floor-map-create-booking"
-                      className="w-full bg-primary-600 hover:bg-primary-700 h-14 font-black text-lg shadow-lg shadow-primary-500/20 active:scale-[0.98] transition-all disabled:opacity-50"
+                      className="h-12 w-full bg-primary-600 text-base font-black shadow-lg shadow-primary-500/20 transition-all hover:bg-primary-700 active:scale-[0.98] disabled:opacity-50 sm:h-14 sm:text-lg"
                       onClick={handleBooking}
                       isLoading={bookingLoading}
                       loadingText={t("floorMap.processing")}

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { Camera, QrCode, ArrowLeft, CheckCircle2, AlertCircle, History, Info, Send, Loader2, X, ListChecks } from "lucide-react"
 import { useRouter } from "next/navigation"
 import type { Session } from "@supabase/supabase-js"
-import type { CameraDevice, Html5Qrcode } from "html5-qrcode"
+import type { Html5Qrcode } from "html5-qrcode"
 import { Button } from "@/components/premium/ui/button"
 import { Card, CardContent } from "@/components/premium/ui/card"
 import { Input } from "@/components/premium/ui/input"
@@ -32,6 +32,27 @@ interface CheckInResponse {
 }
 
 type Html5QrcodeModule = typeof import("html5-qrcode")
+const CAMERA_PERMISSION_TIMEOUT_MS = 7000
+const SCANNER_START_TIMEOUT_MS = 9000
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  let timeoutId: ReturnType<typeof setTimeout>
+
+  return new Promise<T>((resolve, reject) => {
+    timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs)
+
+    promise.then(
+      (value) => {
+        clearTimeout(timeoutId)
+        resolve(value)
+      },
+      (error) => {
+        clearTimeout(timeoutId)
+        reject(error)
+      },
+    )
+  })
+}
 
 function findActiveCheckedInBooking(bookings: Booking[]) {
   const now = Date.now()
@@ -116,8 +137,31 @@ export default function CheckInPage() {
     return null
   }, [])
 
-  const pickBackCamera = React.useCallback((cameras: CameraDevice[]) => {
-    return cameras.find((camera) => /back|rear|environment|sau/i.test(camera.label)) ?? cameras[0] ?? null
+  const requestCameraAccess = React.useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error("Camera API is not available in this browser")
+    }
+
+    let stream: MediaStream | null = null
+
+    try {
+      stream = await withTimeout(
+        navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: {
+            facingMode: { ideal: "environment" },
+          },
+        }),
+        CAMERA_PERMISSION_TIMEOUT_MS,
+        "Camera permission request timed out",
+      )
+    } finally {
+      stream?.getTracks().forEach((track) => track.stop())
+    }
+
+    if (stream) {
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 200))
+    }
   }, [])
 
   // --- Auth & Initial Data ---
@@ -266,24 +310,13 @@ export default function CheckInPage() {
     setErrorMessage(null)
     setStatus("scanning")
 
-    // Set a timeout of 7 seconds to trigger if scanner fails to initialize
-    const timeoutId = window.setTimeout(() => {
-      if (scannerStartTokenRef.current === startToken) {
-        console.warn("Camera start timed out after 7s")
-        void stopScanner()
-        setIsScannerStarting(false)
-        enableManualFallback(t("checkIn.cameraTimeout"))
-        toast({ title: t("checkIn.errorTitle"), description: t("checkIn.cameraTimeout"), variant: "error" })
-      }
-    }, 7000)
-
     void (async () => {
       try {
         await stopScanner()
+        await requestCameraAccess()
 
         const container = await waitForScannerContainer()
         if (!container || scannerStartTokenRef.current !== startToken) {
-          window.clearTimeout(timeoutId)
           return
         }
 
@@ -291,67 +324,60 @@ export default function CheckInPage() {
         const scanner = new Html5Qrcode(container.id, false)
         html5QrcodeRef.current = scanner
 
-        let cameraConfigOrId: string | { facingMode: string } = { facingMode: "environment" }
-
-        try {
-          const cameras = await Html5Qrcode.getCameras()
-          const backCamera = pickBackCamera(cameras)
-          if (backCamera?.id) {
-            cameraConfigOrId = backCamera.id
-          }
-        } catch (cameraListError) {
-          console.info("Could not enumerate cameras, falling back to environment camera.", cameraListError)
-        }
-
         if (scannerStartTokenRef.current !== startToken) {
-          window.clearTimeout(timeoutId)
           await stopScanner()
           return
         }
 
-        await scanner.start(
-          cameraConfigOrId,
-          {
-            fps: 15,
-            qrbox: (viewfinderWidth, viewfinderHeight) => {
-              const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.68)
-              const size = Math.max(220, Math.min(edge, 320))
-              return { width: size, height: size }
+        await withTimeout(
+          scanner.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: (viewfinderWidth, viewfinderHeight) => {
+                const edge = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.68)
+                const size = Math.max(220, Math.min(edge, 320))
+                return { width: size, height: size }
+              },
+              aspectRatio: 1,
+              disableFlip: false,
             },
-            aspectRatio: 1,
-            disableFlip: false,
-          },
-          (decodedText) => {
-            if (hasDecodedRef.current) {
-              return
-            }
+            (decodedText) => {
+              if (hasDecodedRef.current) {
+                return
+              }
 
-            hasDecodedRef.current = true
-            void (async () => {
-              scannerStartTokenRef.current += 1
-              await stopScanner()
-              void handleCheckIn(decodedText)
-            })()
-          },
-          () => {},
+              hasDecodedRef.current = true
+              void (async () => {
+                scannerStartTokenRef.current += 1
+                await stopScanner()
+                void handleCheckIn(decodedText)
+              })()
+            },
+            () => {},
+          ),
+          SCANNER_START_TIMEOUT_MS,
+          "Scanner start timed out",
         )
 
-        window.clearTimeout(timeoutId)
         if (scannerStartTokenRef.current === startToken) {
           setIsScannerStarting(false)
         }
       } catch (err) {
-        window.clearTimeout(timeoutId)
         console.error("Scanner start error:", err)
         await stopScanner()
 
         if (scannerStartTokenRef.current === startToken) {
           setIsScannerStarting(false)
-          enableManualFallback(t("checkIn.cameraFailed"))
+          const message = err instanceof Error && err.message.toLowerCase().includes("timed out")
+            ? t("checkIn.cameraTimeout")
+            : t("checkIn.cameraFailed")
+          enableManualFallback(message)
+          toast({ title: t("checkIn.errorTitle"), description: message, variant: "error" })
         }
       }
     })()
-  }, [enableManualFallback, handleCheckIn, loadScannerModule, pickBackCamera, stopScanner, t, toast, waitForScannerContainer])
+  }, [enableManualFallback, handleCheckIn, loadScannerModule, requestCameraAccess, stopScanner, t, toast, waitForScannerContainer])
 
   const handleCancelScanner = React.useCallback(() => {
     scannerStartTokenRef.current += 1
@@ -415,7 +441,7 @@ export default function CheckInPage() {
               <button
                 type="button"
                 data-testid="check-in-toggle-manual"
-                onClick={() => setManual(true)}
+                onClick={handleManualToggle}
                 className="group flex flex-1 touch-manipulation items-center gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 text-left transition hover:-translate-y-0.5 hover:border-blue-300 dark:border-white/10 dark:bg-white/5"
               >
                 <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-white text-blue-600 ring-1 ring-slate-200 dark:bg-slate-900 dark:ring-white/10">
@@ -511,7 +537,7 @@ export default function CheckInPage() {
                       <Button onClick={() => setStatus("idle")} variant="outline" className="h-12 rounded-2xl border-slate-200 font-black text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200">
                         {t("checkIn.tryAgain")}
                       </Button>
-                      <Button onClick={() => setManual(true)} className="h-12 rounded-2xl font-black">
+                      <Button onClick={handleManualToggle} className="h-12 rounded-2xl font-black">
                         <QrCode className="mr-2" size={18} />
                         {t("checkIn.useManualShort")}
                       </Button>
@@ -566,7 +592,7 @@ export default function CheckInPage() {
                   )}
                 </AnimatePresence>
                 {!manual && status !== "error" && (
-                  <Button onClick={() => setManual(true)} variant="outline" className="h-12 w-full rounded-2xl border-slate-200 font-black text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200">
+                  <Button onClick={handleManualToggle} variant="outline" className="h-12 w-full rounded-2xl border-slate-200 font-black text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-slate-200">
                     {t("checkIn.useManual")}
                   </Button>
                 )}
